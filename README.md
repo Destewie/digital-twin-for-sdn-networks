@@ -1,4 +1,4 @@
-**Networking 2** *(a.k.a. Softwarized and virtualized mobile networks)* **project** (at UniTrento).
+**Networking 2** *(a.k.a. Softwarized and virtualized mobile networks)* **project** (at UniTrento).  
 Professor: Fabrizio Granelli.
 
 ## Project requirements:
