@@ -1,13 +1,5 @@
 """
 rest_client.py - Wrapper per le API REST Northbound di Ryu.
-
-Endpoint utilizzati (basati su ryu.app.rest_topology e ryu.app.ofctl_rest):
-- GET /v1.0/topology/switches
-- GET /v1.0/topology/links
-- GET /v1.0/topology/hosts
-- GET /v1.0/stats/ports/<dpid>
-- GET /v1.0/stats/flows/<dpid>
-- GET /v1.0/stats/portdesc/<dpid>   (opzionale, per stato porte)
 """
 
 import requests
@@ -15,16 +7,12 @@ import json
 from typing import List, Dict, Any, Optional
 
 class RyuRestClient:
-    """Client semplice per le REST API di Ryu."""
-
     def __init__(self, base_url: str = "http://127.0.0.1:8080"):
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
-        # Timeout per evitare blocchi
         self.timeout = 3.0
 
     def _get(self, endpoint: str) -> Optional[Dict[str, Any]]:
-        """Effettua una GET e restituisce il JSON oppure None in caso di errore."""
         url = f"{self.base_url}{endpoint}"
         try:
             resp = self.session.get(url, timeout=self.timeout)
@@ -35,17 +23,12 @@ class RyuRestClient:
             return None
 
     # ----------------------------------------------------------------------
-    # Topology endpoints (rest_topology)
+    # Topology endpoints (rest_topology) – these keep /v1.0 prefix
     # ----------------------------------------------------------------------
     def get_switches(self) -> Optional[List[Dict]]:
-        """Restituisce la lista degli switch con i loro DPID.
-        Esempio di risposta:
-        [{"dpid": "0000000000000001", "ports": [...]}, ...]
-        """
         data = self._get("/v1.0/topology/switches")
         if data is None:
             return None
-        # A volte la risposta è una lista direttamente, altre volte un dict con chiave "switches"
         if isinstance(data, list):
             return data
         elif isinstance(data, dict) and "switches" in data:
@@ -55,9 +38,6 @@ class RyuRestClient:
             return None
 
     def get_links(self) -> Optional[List[Dict]]:
-        """Restituisce la lista dei link tra switch.
-        Ogni link ha: src, dst, src_port, dst_port, state (0=down, 1=up)
-        """
         data = self._get("/v1.0/topology/links")
         if data is None:
             return None
@@ -70,9 +50,6 @@ class RyuRestClient:
             return None
 
     def get_hosts(self) -> Optional[List[Dict]]:
-        """Restituisce la lista degli host connessi.
-        Ogni host ha: mac, ipv4 (lista), port, dpid (switch connesso)
-        """
         data = self._get("/v1.0/topology/hosts")
         if data is None:
             return None
@@ -85,57 +62,55 @@ class RyuRestClient:
             return None
 
     # ----------------------------------------------------------------------
-    # OFPT stats (ofctl_rest)
+    # Statistics endpoints (ofctl_rest) – NO /v1.0, DPID as integer
     # ----------------------------------------------------------------------
-    def get_port_stats(self, dpid: str) -> Optional[List[Dict]]:
-        """Statistiche delle porte per uno switch (DPID in formato esadecimale a 16 char).
-        Restituisce lista di dict: {"port_no": X, "rx_packets": ..., "tx_packets": ..., ...}
-        """
-        endpoint = f"/v1.0/stats/ports/{dpid}"
+    @staticmethod
+    def _dpid_to_int(dpid_hex: str) -> int:
+        """Convert a 16‑character hex DPID (e.g. '0000000000000001') to int (e.g. 1)."""
+        return int(dpid_hex, 16)
+
+    def get_port_stats(self, dpid_hex: str) -> Optional[List[Dict]]:
+        """Get port statistics for a switch. Endpoint: /stats/port/<dpid>"""
+        dpid_int = self._dpid_to_int(dpid_hex)
+        endpoint = f"/stats/port/{dpid_int}"
         data = self._get(endpoint)
         if data is None:
             return None
-        # La risposta di ofctl_rest è un dict con chiave dpid, valore lista di porte
-        if isinstance(data, dict) and dpid in data:
-            return data[dpid]
+        # Response is a dict with the integer DPID as key
+        if isinstance(data, dict) and str(dpid_int) in data:
+            return data[str(dpid_int)]
         else:
-            print(f"[WARN] Formato inaspettato per /stats/ports/{dpid}: {data}")
+            print(f"[WARN] Formato inaspettato per /stats/port/{dpid_int}: {data}")
             return None
 
-    def get_flow_stats(self, dpid: str) -> Optional[List[Dict]]:
-        """Statistiche dei flussi per uno switch.
-        Restituisce lista di flow: {"match": {...}, "actions": [...], "packet_count": ..., "byte_count": ...}
-        """
-        endpoint = f"/v1.0/stats/flows/{dpid}"
+    def get_flow_stats(self, dpid_hex: str) -> Optional[List[Dict]]:
+        """Get flow statistics for a switch. Endpoint: /stats/flow/<dpid>"""
+        dpid_int = self._dpid_to_int(dpid_hex)
+        endpoint = f"/stats/flow/{dpid_int}"
         data = self._get(endpoint)
         if data is None:
             return None
-        if isinstance(data, dict) and dpid in data:
-            return data[dpid]
+        if isinstance(data, dict) and str(dpid_int) in data:
+            return data[str(dpid_int)]
         else:
-            print(f"[WARN] Formato inaspettato per /stats/flows/{dpid}: {data}")
+            print(f"[WARN] Formato inaspettato per /stats/flow/{dpid_int}: {data}")
             return None
 
-    def get_port_description(self, dpid: str) -> Optional[List[Dict]]:
-        """Descrizione delle porte (stato, velocità, nome).
-        Utile per rilevare lo stato UP/DOWN reale della porta.
-        """
-        endpoint = f"/v1.0/stats/portdesc/{dpid}"
+    def get_port_description(self, dpid_hex: str) -> Optional[List[Dict]]:
+        """Get port description (including state) for a switch. Endpoint: /stats/portdesc/<dpid>"""
+        dpid_int = self._dpid_to_int(dpid_hex)
+        endpoint = f"/stats/portdesc/{dpid_int}"
         data = self._get(endpoint)
         if data is None:
             return None
-        if isinstance(data, dict) and dpid in data:
-            return data[dpid]
+        if isinstance(data, dict) and str(dpid_int) in data:
+            return data[str(dpid_int)]
         else:
-            print(f"[WARN] Formato inaspettato per /stats/portdesc/{dpid}: {data}")
+            print(f"[WARN] Formato inaspettato per /stats/portdesc/{dpid_int}: {data}")
             return None
 
 
-# ----------------------------------------------------------------------
-# Test veloce (da eseguire solo se script lanciato direttamente)
-# ----------------------------------------------------------------------
 if __name__ == "__main__":
-    import time
     client = RyuRestClient("http://127.0.0.1:8080")
     print("=== Test REST client ===")
     
@@ -149,11 +124,14 @@ if __name__ == "__main__":
     print(f"Hosts: {hosts}")
     
     if switches and len(switches) > 0:
-        dpid = switches[0]["dpid"]
-        print(f"\nTest statistiche per switch {dpid}:")
-        ports = client.get_port_stats(dpid)
+        dpid_hex = switches[0]["dpid"]
+        print(f"\nTest statistiche per switch {dpid_hex}:")
+        
+        ports = client.get_port_stats(dpid_hex)
         print(f"Port stats: {ports}")
-        flows = client.get_flow_stats(dpid)
+        
+        flows = client.get_flow_stats(dpid_hex)
         print(f"Flow stats: {flows}")
-        portdesc = client.get_port_description(dpid)
+        
+        portdesc = client.get_port_description(dpid_hex)
         print(f"Port description: {portdesc}")
