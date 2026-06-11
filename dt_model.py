@@ -141,35 +141,54 @@ class DigitalTwin:
 
     def update_host_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
         """
-        Update host-switch edge states based on port operational status.
-        portdesc_dict: mapping dpid_hex -> list of port descriptions.
-        Each port description includes 'port_no' and 'state' (0=down, 1=up, etc.)
+        Update host-switch edge states based on port admin/operational status.
+        portdesc_dict: mapping dpid_hex -> list of port descriptions from /stats/portdesc/<dpid>
+        A port is considered DOWN if:
+          - config has OFPPC_PORT_DOWN (bit 0) set, OR
+          - state has OFPPS_LINK_DOWN (bit 0) set.
         """
+        if not portdesc_dict:
+            return
         for dpid, ports in portdesc_dict.items():
             if not self.graph.has_node(dpid):
                 continue
-            for port_info in ports:
-                port_no = str(port_info.get("port_no"))
-                # state: 0 = down, 1 = up (Linux OVS), other values possible
-                port_state_up = (port_info.get("state") == 1)
-                # Find all host-switch edges that use this switch and port
-                for u, v, key, attrs in self.graph.edges(keys=True, data=True):
-                    if attrs.get("type") != "host_switch":
-                        continue
-                    # Determine which endpoint is the switch
-                    if self.graph.nodes[u].get("type") == "switch":
-                        sw, host = u, v
-                        sw_port = attrs.get("switch_port")
-                    elif self.graph.nodes[v].get("type") == "switch":
-                        sw, host = v, u
-                        sw_port = attrs.get("switch_port")
-                    else:
-                        continue
-                    if sw == dpid and sw_port == port_no:
-                        new_state = "up" if port_state_up else "down"
-                        if attrs.get("state") != new_state:
-                            self.graph[u][v][key]["state"] = new_state
-                            print(f"[STATE] Host {host} link to switch {sw} port {port_no} is now {new_state}")
+
+            port_state_map = {}
+            for p in ports:
+                port_no = str(p.get("port_no"))
+                # Ignore LOCAL port (not relevant for host links)
+                if port_no == "LOCAL":
+                    continue
+                config = p.get("config", 0)
+                state = p.get("state", 0)
+                # Down if admin down (config bit 0) OR link down (state bit 0)
+                is_down = ((config & 1) == 1) or ((state & 1) == 1)
+                port_state_map[port_no] = "down" if is_down else "up"
+                print(f"[DEBUG] Switch {dpid} port {port_no}: config={config}, state={state} -> {port_state_map[port_no]}")
+
+            # Update each host-switch edge that uses this switch
+            for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
+                if attrs.get("type") != "host_switch":
+                    continue
+                # Identify switch and port
+                if self.graph.nodes[u].get("type") == "switch":
+                    sw, host = u, v
+                    sw_port = str(attrs.get("switch_port"))
+                elif self.graph.nodes[v].get("type") == "switch":
+                    sw, host = v, u
+                    sw_port = str(attrs.get("switch_port"))
+                else:
+                    continue
+
+                if sw != dpid:
+                    continue
+
+                if sw_port in port_state_map:
+                    new_state = port_state_map[sw_port]
+                    old_state = attrs.get("state", "unknown")
+                    if new_state != old_state:
+                        self.graph[u][v][key]["state"] = new_state
+                        print(f"[STATE] Host {host} link to switch {sw} port {sw_port} is now {new_state}")
 
     # ----------------------------------------------------------------------
     # Diff & logging

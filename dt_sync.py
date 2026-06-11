@@ -47,6 +47,7 @@ class DigitalTwinSync:
                     flow_stats_dict[dpid] = flow_stats
                 if port_desc:
                     portdesc_dict[dpid] = port_desc
+                    print(f"[DEBUG] Raw portdesc for {dpid}: {port_desc}")  # <-- add this
 
             self.dt.update_port_stats(port_stats_dict)
             self.dt.update_flow_stats(flow_stats_dict)
