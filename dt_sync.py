@@ -35,19 +35,24 @@ class DigitalTwinSync:
             # 2. Statistics per switch
             port_stats_dict = {}
             flow_stats_dict = {}
+            portdesc_dict = {}  # new: for port state
             for sw in switches:
                 dpid = sw["dpid"]
                 port_stats = self.client.get_port_stats(dpid)
                 flow_stats = self.client.get_flow_stats(dpid)
+                port_desc = self.client.get_port_description(dpid)  # we already implemented this
                 if port_stats:
                     port_stats_dict[dpid] = port_stats
                 if flow_stats:
                     flow_stats_dict[dpid] = flow_stats
+                if port_desc:
+                    portdesc_dict[dpid] = port_desc
 
             self.dt.update_port_stats(port_stats_dict)
             self.dt.update_flow_stats(flow_stats_dict)
+            self.dt.update_host_link_states(portdesc_dict)   # new call
 
-            # 3. Compare with previous state (optional logging)
+            # 3. Compare with previous state
             current_state = self.dt.to_dict()
             if self._prev_state:
                 self.dt.compare_and_log(self._prev_state)

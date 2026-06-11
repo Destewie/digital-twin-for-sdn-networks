@@ -139,6 +139,38 @@ class DigitalTwin:
                 continue
             self.graph.nodes[dpid]["flows"] = flows
 
+    def update_host_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
+        """
+        Update host-switch edge states based on port operational status.
+        portdesc_dict: mapping dpid_hex -> list of port descriptions.
+        Each port description includes 'port_no' and 'state' (0=down, 1=up, etc.)
+        """
+        for dpid, ports in portdesc_dict.items():
+            if not self.graph.has_node(dpid):
+                continue
+            for port_info in ports:
+                port_no = str(port_info.get("port_no"))
+                # state: 0 = down, 1 = up (Linux OVS), other values possible
+                port_state_up = (port_info.get("state") == 1)
+                # Find all host-switch edges that use this switch and port
+                for u, v, key, attrs in self.graph.edges(keys=True, data=True):
+                    if attrs.get("type") != "host_switch":
+                        continue
+                    # Determine which endpoint is the switch
+                    if self.graph.nodes[u].get("type") == "switch":
+                        sw, host = u, v
+                        sw_port = attrs.get("switch_port")
+                    elif self.graph.nodes[v].get("type") == "switch":
+                        sw, host = v, u
+                        sw_port = attrs.get("switch_port")
+                    else:
+                        continue
+                    if sw == dpid and sw_port == port_no:
+                        new_state = "up" if port_state_up else "down"
+                        if attrs.get("state") != new_state:
+                            self.graph[u][v][key]["state"] = new_state
+                            print(f"[STATE] Host {host} link to switch {sw} port {port_no} is now {new_state}")
+
     # ----------------------------------------------------------------------
     # Diff & logging
     # ----------------------------------------------------------------------
