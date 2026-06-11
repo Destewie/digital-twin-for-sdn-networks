@@ -81,7 +81,12 @@ def main():
     print("\n--- Host‑Switch connections ---")
     for u, v, key, attrs in dt.graph.edges(keys=True, data=True):
         if attrs.get("type") == "host_switch":
-            print(f"Host {u} connected to switch {v} on port {attrs['switch_port']}")
+            # Identify which is host and which is switch
+            if dt.graph.nodes[u].get("type") == "host":
+                host, switch = u, v
+            else:
+                host, switch = v, u
+            print(f"Host {host} connected to switch {switch} on port {attrs['switch_port']}")
     
     # 7. Save to JSON file for later inspection
     json_file = "dt_snapshot.json"
