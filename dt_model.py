@@ -213,6 +213,9 @@ class DigitalTwin:
             u = edge.pop("u")
             v = edge.pop("v")
             key = edge.pop("key")
+            # Convert key to tuple if it's a list (JSON serialization)
+            if isinstance(key, list):
+                key = tuple(key)
             self.graph.add_edge(u, v, key=key, **edge)
 
     def to_json(self, filename: str):
