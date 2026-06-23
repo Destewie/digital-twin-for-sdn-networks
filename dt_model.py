@@ -68,6 +68,7 @@ class DigitalTwin:
                                     src_port=src_port, dst_port=dst_port, state=state)
             else:
                 self.graph[src][dst][key]["state"] = state
+
         # Remove edges not in current links
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
             if data.get("type") == "switch_switch":

@@ -31,7 +31,6 @@ class DigitalTwinSync:
             self.dt.update_switches(switches)
             self.dt.update_links(links)
             self.dt.update_hosts(hosts)
-            self.dt.update_switch_link_states(portdesc_dict) 
 
             # 2. Statistics per switch
             port_stats_dict = {}
@@ -53,6 +52,7 @@ class DigitalTwinSync:
             self.dt.update_port_stats(port_stats_dict)
             self.dt.update_flow_stats(flow_stats_dict)
             self.dt.update_host_link_states(portdesc_dict)   # new call
+            self.dt.update_switch_link_states(portdesc_dict) 
 
             # 3. Compare with previous state
             current_state = self.dt.to_dict()
