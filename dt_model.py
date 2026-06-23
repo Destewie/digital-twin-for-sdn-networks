@@ -75,6 +75,52 @@ class DigitalTwin:
                 if key not in current_links:
                     self.graph.remove_edge(u, v, k)
 
+    def update_switch_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
+        """
+        Update switch-switch link states based on port operational status.
+        A link is considered UP only if both end ports are up.
+        """
+        if not portdesc_dict:
+            return
+
+        # First build a quick lookup: (dpid, port_no) -> state ('up'/'down')
+        port_state_lookup = {}
+        for dpid, ports in portdesc_dict.items():
+            for p in ports:
+                port_no = str(p.get("port_no"))
+                if port_no == "LOCAL":
+                    continue
+                config = p.get("config", 0)
+                state = p.get("state", 0)
+                is_down = ((config & 1) == 1) or ((state & 1) == 1)
+                port_state_lookup[(dpid, port_no)] = "down" if is_down else "up"
+
+        # Iterate over all switch-switch edges
+        for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
+            if attrs.get("type") != "switch_switch":
+                continue
+            # Get source and destination DPIDs and ports
+            src_dpid = u
+            dst_dpid = v
+            src_port = str(attrs.get("src_port"))
+            dst_port = str(attrs.get("dst_port"))
+
+            # Determine if both ends are up
+            src_state = port_state_lookup.get((src_dpid, src_port), "unknown")
+            dst_state = port_state_lookup.get((dst_dpid, dst_port), "unknown")
+
+            # Link is up only if both ends are up
+            if src_state == "up" and dst_state == "up":
+                new_state = 1
+            else:
+                new_state = 0
+
+            old_state = attrs.get("state", -1)
+            if new_state != old_state:
+                self.graph[u][v][key]["state"] = new_state
+                status = "UP" if new_state == 1 else "DOWN"
+                print(f"[STATE] Switch link {src_dpid}:{src_port} <-> {dst_dpid}:{dst_port} is now {status}")
+
     def update_hosts(self, hosts_data: Optional[List[Dict]]):
         """
         hosts_data: list from /v1.0/topology/hosts

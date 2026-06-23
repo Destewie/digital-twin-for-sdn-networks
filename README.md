@@ -37,7 +37,23 @@ On the last terminal:
 ---
 
 ## How to modify the mininet network
+### Disable/enable a link
 On the mininet cli
 - ```link h2 s1 down```
 - ```pingall```
 - ```link h2 s1 up```
+
+### Add a host
+```py net.addHost('h3')```
+```mininet> py net.addLink(h3, s1)```
+```mininet> py s1.attach('s1-eth3')```
+```mininet> py h3.setIP('10.0.0.3/24')```
+```mininet> py h3.setMAC('00:00:00:00:00:03')```
+
+### Add a switch and a host
+```py net.addSwitch('s2')```
+```py net.addLink(s1, s2)```
+```py net.addHost('h4')```
+```py net.addLink(h4, s2)```
+```py s2.start([controller])```
+```py h4.setIP('10.0.0.4/24')```
