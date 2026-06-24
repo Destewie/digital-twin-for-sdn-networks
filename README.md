@@ -36,7 +36,7 @@ On the last terminal:
 
 ---
 
-## How to modify the mininet network
+## How to modify the mininet network through its CLI
 ### Disable/enable a link
 On the mininet cli
 - ```link h2 s1 down```
@@ -64,3 +64,7 @@ On the mininet cli
 ```py s2.start([net.controllers[0]])```
 ```py h4.setIP('10.0.0.4/24')```
 ```py h4.setMAC('00:00:00:00:00:04')```
+
+### Remove a addSwitch
+```py net.delSwitch(s1)```
+
