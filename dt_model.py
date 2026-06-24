@@ -16,7 +16,7 @@ class DigitalTwin:
     def __init__(self):
         """Initialize an empty MultiGraph for the digital twin."""
         self.graph = nx.MultiGraph()
-        # Keep track of previous state for diff logging (optional)
+        # Keep track of previous state for diff logging
         self._prev_state = None
 
     # ----------------------------------------------------------------------
