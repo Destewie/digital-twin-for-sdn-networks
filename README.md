@@ -53,20 +53,20 @@ On the mininet cli
 ```py net.addLink(h3, s1)```  
 ```py h3.setIP('10.0.0.3/8')```  
 ```py h3.setMAC('00:00:00:00:00:03')```  
-```py s1.attach('s1-eth3')```  
 ```py net.start()```  
+```py s1.attach('s1-eth3')```  
   
 ### Add a switch and a host
 ```py net.addSwitch('s2')```  
 ```py net.addLink(s1, s2)``` -> *this will create s1-eth4 and s2-eth1*  
-```py s1.attach('s1-eth4')```  
-```py s2.attach('s2-eth1')```  
 ```py net.addHost('h4')```  
 ```py net.addLink(h4, s2)``` -> *this will create s2-eth2*  
 ```py h4.setIP('10.0.0.4/8')```  
 ```py h4.setMAC('00:00:00:00:00:04')```  
+```py net.start()```  
+```py s1.attach('s1-eth4')```  
+```py s2.attach('s2-eth1')```  
 ```py s2.attach('s2-eth2')```  
-```py s2.start([net.controllers[0]])```  
   
 ### Remove a switch
 ```py net.delSwitch(s1)```  
