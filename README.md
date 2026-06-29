@@ -25,9 +25,12 @@ On every terminal:
 On one terminal:  
 ```sudo mn --topo single,3 --mac --switch ovsk --controller remote```  
 
+*Alternative topology:*
+```sudo mn --topo linear,2 --mac --switch ovsk --controller remote```  
+
 #### Start a ryu controller  
 On another terminal:  
-```ryu-manager --verbose ryu.app.rest_topology ryu.app.ofctl_rest ryu.app.simple_switch_13```  
+```ryu-manager --verbose --observe-links ryu.app.rest_topology ryu.app.ofctl_rest ryu.app.simple_switch_13```  
 
 #### Finally start the digital twin script
 On the last terminal:  
