@@ -62,6 +62,8 @@ class DigitalTwinSync:
             return True
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"[ERROR] Exception in sync cycle: {e}")
             return False
 

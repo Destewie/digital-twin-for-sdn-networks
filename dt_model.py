@@ -46,33 +46,32 @@ class DigitalTwin:
 
     def update_links(self, links_data: Optional[List[Dict]]):
         """
-        links_data: list from /v1.0/topology/links
-        Each element: {"src": "dpid_src", "dst": "dpid_dst",
-                       "src_port": "...", "dst_port": "...", "state": 0/1}
+        Aggiorna i link switch-switch a partire dai dati di /v1.0/topology/links.
+        Ogni elemento ha formato:
+        {"src": {"dpid": "...", "port_no": "...", ...}, "dst": {"dpid": "...", "port_no": "...", ...}}
         """
         if links_data is None:
             return
-        # Keep track of existing links to remove stale ones
         current_links = set()
         for link in links_data:
-            src = link["src"]
-            dst = link["dst"]
-            src_port = link["src_port"]
-            dst_port = link["dst_port"]
-            state = link["state"]  # 0=down, 1=up
+            # Estrai i dati dalla struttura annidata
+            src = link["src"]["dpid"]
+            dst = link["dst"]["dpid"]
+            src_port = link["src"]["port_no"]
+            dst_port = link["dst"]["port_no"]
             key = (src, dst, src_port, dst_port)
             current_links.add(key)
-            # Add edge if not exists, else update state
+            # Aggiungi l'arco se non esiste (lo stato verrà aggiornato da update_switch_link_states)
             if not self.graph.has_edge(src, dst, key=key):
                 self.graph.add_edge(src, dst, key=key, type="switch_switch",
-                                    src_port=src_port, dst_port=dst_port, state=state)
-            else:
-                self.graph[src][dst][key]["state"] = state
-
-        # Remove edges not in current links
+                                    src_port=src_port, dst_port=dst_port, state=-1)  # -1 = unknown
+        # Rimuovi link non più presenti
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
             if data.get("type") == "switch_switch":
-                key = (u, v, data["src_port"], data["dst_port"])
+                key = (u, v, data.get("src_port"), data.get("dst_port"))
+                # Se mancano src_port/dst_port, salta (non dovrebbe succedere)
+                if None in key:
+                    continue
                 if key not in current_links:
                     self.graph.remove_edge(u, v, k)
 
@@ -84,7 +83,7 @@ class DigitalTwin:
         if not portdesc_dict:
             return
 
-        # First build a quick lookup: (dpid, port_no) -> state ('up'/'down')
+        # Build lookup: (dpid, port_no) -> 'up'/'down'
         port_state_lookup = {}
         for dpid, ports in portdesc_dict.items():
             for p in ports:
@@ -96,31 +95,31 @@ class DigitalTwin:
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_lookup[(dpid, port_no)] = "down" if is_down else "up"
 
-        # Iterate over all switch-switch edges
+        # Iterate over switch-switch edges
         for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
             if attrs.get("type") != "switch_switch":
                 continue
-            # Get source and destination DPIDs and ports
-            src_dpid = u
-            dst_dpid = v
-            src_port = str(attrs.get("src_port"))
-            dst_port = str(attrs.get("dst_port"))
 
-            # Determine if both ends are up
-            src_state = port_state_lookup.get((src_dpid, src_port), "unknown")
-            dst_state = port_state_lookup.get((dst_dpid, dst_port), "unknown")
+            # Verifica che gli attributi necessari esistano
+            src_port = attrs.get("src_port")
+            dst_port = attrs.get("dst_port")
+            if src_port is None or dst_port is None:
+                print(f"[WARN] Edge {u}-{v} missing src_port/dst_port, skipping")
+                continue
 
-            # Link is up only if both ends are up
-            if src_state == "up" and dst_state == "up":
-                new_state = 1
-            else:
-                new_state = 0
+            src_port = str(src_port)
+            dst_port = str(dst_port)
 
+            src_state = port_state_lookup.get((u, src_port), "unknown")
+            dst_state = port_state_lookup.get((v, dst_port), "unknown")
+
+            new_state = 1 if (src_state == "up" and dst_state == "up") else 0
             old_state = attrs.get("state", -1)
             if new_state != old_state:
                 self.graph[u][v][key]["state"] = new_state
                 status = "UP" if new_state == 1 else "DOWN"
-                print(f"[STATE] Switch link {src_dpid}:{src_port} <-> {dst_dpid}:{dst_port} is now {status}")
+                print(f"[STATE] Switch link {u}:{src_port} <-> {v}:{dst_port} is now {status}")
+
 
     def update_hosts(self, hosts_data: Optional[List[Dict]]):
         """
