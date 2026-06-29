@@ -50,9 +50,9 @@ On the mininet cli
 ### Add a host
 *Note that if you don't add this host, port names will change if you try to add another switch in the following set of commands*  
 ```py net.addHost('h3')```  
+```py net.addLink(h3, s1)```  
 ```py h3.setIP('10.0.0.3/24')```  
 ```py h3.setMAC('00:00:00:00:00:03')```  
-```py net.addLink(h3, s1)```  
 ```py s1.attach('s1-eth3')```  
 ```py net.start()```  
   
@@ -62,9 +62,9 @@ On the mininet cli
 ```py s1.attach('s1-eth4')```  
 ```py s2.attach('s2-eth1')```  
 ```py net.addHost('h4')```  
+```py net.addLink(h4, s2)``` -> *this will create s2-eth2*  
 ```py h4.setIP('10.0.0.4/24')```  
 ```py h4.setMAC('00:00:00:00:00:04')```  
-```py net.addLink(h4, s2)``` -> *this will create s2-eth2*  
 ```py s2.attach('s2-eth2')```  
 ```py s2.start([net.controllers[0]])```  
   
