@@ -338,6 +338,62 @@ class DigitalTwin:
         return (f"Digital Twin: {len(switches)} switches, {len(hosts)} hosts, "
                 f"{len(links)} switch‑switch links.")
 
+    # ----------------------------------------------------------------------
+    # What‑If Simulation
+    # ----------------------------------------------------------------------
+    def clone(self) -> 'DigitalTwin':
+        """Return a deep copy of the twin (detached from the real network)."""
+        import copy
+        new_twin = DigitalTwin()
+        new_twin.graph = copy.deepcopy(self.graph)
+        new_twin._prev_state = None
+        return new_twin
+
+    def add_hypothetical_flow(self, dpid: str, match: dict, actions: list, priority: int = 1):
+        """
+        Add a hypothetical flow rule to a switch in the twin.
+        This does NOT affect the real network.
+        """
+        if not self.graph.has_node(dpid):
+            raise ValueError(f"Switch {dpid} not found")
+        if "hypothetical_flows" not in self.graph.nodes[dpid]:
+            self.graph.nodes[dpid]["hypothetical_flows"] = []
+        self.graph.nodes[dpid]["hypothetical_flows"].append({
+            "match": match,
+            "actions": actions,
+            "priority": priority,
+            "hypothetical": True
+        })
+
+    def simulate_impact(self) -> dict:
+        """
+        Analyse the impact of hypothetical changes.
+        Returns a dict with affected flows, hosts, and links.
+        """
+        impact = {
+            "affected_flows": [],
+            "affected_hosts": set(),
+            "affected_links": set()
+        }
+        for sw, attrs in self.graph.nodes(data=True):
+            if attrs.get("type") != "switch":
+                continue
+            real_flows = attrs.get("flows", [])
+            hypo_flows = attrs.get("hypothetical_flows", [])
+            for hf in hypo_flows:
+                for rf in real_flows:
+                    # Simple overlap: exact match of match dict (can be refined)
+                    if rf.get("match") == hf["match"]:
+                        impact["affected_flows"].append({
+                            "switch": sw,
+                            "real_flow": rf,
+                            "hypothetical": hf
+                        })
+                        # Track hosts via MAC addresses
+                        for field in ["dl_src", "dl_dst", "nw_src", "nw_dst"]:
+                            if field in rf["match"]:
+                                impact["affected_hosts"].add(rf["match"][field])
+        return impact
 
 # ----------------------------------------------------------------------
 # Quick test (to be run after rest_client works)

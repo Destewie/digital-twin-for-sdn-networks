@@ -1,22 +1,39 @@
 #!/usr/bin/env python3
 """
-main.py - Entry point for the Digital Twin sync service.
+main.py - Entry point for the Digital Twin service with interactive CLI.
 """
 
 import argparse
-import os
-from dt_sync import start_sync
+import threading
+import time
+from dt_sync import DigitalTwinSync
+from dt_model import DigitalTwin
+from dt_cli import DTCli
 
 def main():
     parser = argparse.ArgumentParser(description="Digital Twin for SDN networks")
-    parser.add_argument("--ryu-url", default=os.getenv("RYU_URL", "http://127.0.0.1:8080"),
+    parser.add_argument("--ryu-url", default="http://127.0.0.1:8080",
                         help="Ryu REST API base URL")
-    parser.add_argument("--interval", type=float, default=float(os.getenv("POLL_INTERVAL", "2.0")),
+    parser.add_argument("--interval", type=float, default=2.0,
                         help="Polling interval in seconds")
     args = parser.parse_args()
 
-    print(f"=== Digital Twin ===\nRyu URL: {args.ryu_url}\nPoll interval: {args.interval}s\n")
-    start_sync(ryu_url=args.ryu_url, interval=args.interval)
+    dt = DigitalTwin()
+    syncer = DigitalTwinSync(args.ryu_url, dt, args.interval)
+
+    # Run the sync loop in a background daemon thread
+    def sync_worker():
+        while True:
+            syncer.fetch_and_update()
+            time.sleep(args.interval)
+
+    thread = threading.Thread(target=sync_worker, daemon=True)
+    thread.start()
+    print(f"[INFO] Sync loop started (interval {args.interval}s)")
+
+    # Start the interactive CLI
+    cli = DTCli(dt, syncer)
+    cli.cmdloop()
 
 if __name__ == "__main__":
     main()
