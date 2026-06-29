@@ -45,74 +45,53 @@ class DigitalTwin:
                 self.graph.remove_node(node)
 
     def update_links(self, links_data: Optional[List[Dict]]):
-        """
-        Aggiorna i link switch-switch a partire dai dati di /v1.0/topology/links.
-        Ogni elemento ha formato:
-        {"src": {"dpid": "...", "port_no": "...", ...}, "dst": {"dpid": "...", "port_no": "...", ...}}
-        """
         if links_data is None:
             return
         current_links = set()
         for link in links_data:
-            # Estrai i dati dalla struttura annidata
             src = link["src"]["dpid"]
             dst = link["dst"]["dpid"]
-            src_port = link["src"]["port_no"]
-            dst_port = link["dst"]["port_no"]
+            src_port = int(link["src"]["port_no"], 16)
+            dst_port = int(link["dst"]["port_no"], 16)
             key = (src, dst, src_port, dst_port)
             current_links.add(key)
-            # Aggiungi l'arco se non esiste (lo stato verrà aggiornato da update_switch_link_states)
             if not self.graph.has_edge(src, dst, key=key):
                 self.graph.add_edge(src, dst, key=key, type="switch_switch",
-                                    src_port=src_port, dst_port=dst_port, state=-1)  # -1 = unknown
+                                    src_port=src_port, dst_port=dst_port, state=-1)
         # Rimuovi link non più presenti
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
             if data.get("type") == "switch_switch":
                 key = (u, v, data.get("src_port"), data.get("dst_port"))
-                # Se mancano src_port/dst_port, salta (non dovrebbe succedere)
                 if None in key:
                     continue
                 if key not in current_links:
                     self.graph.remove_edge(u, v, k)
 
     def update_switch_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
-        """
-        Update switch-switch link states based on port operational status.
-        A link is considered UP only if both end ports are up.
-        """
         if not portdesc_dict:
             return
-
-        # Build lookup: (dpid, port_no) -> 'up'/'down'
         port_state_lookup = {}
         for dpid, ports in portdesc_dict.items():
             for p in ports:
-                port_no = str(p.get("port_no"))
+                port_no = p.get("port_no")
                 if port_no == "LOCAL":
                     continue
+                if isinstance(port_no, str) and port_no.isdigit():
+                    port_no = int(port_no)
                 config = p.get("config", 0)
                 state = p.get("state", 0)
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_lookup[(dpid, port_no)] = "down" if is_down else "up"
 
-        # Iterate over switch-switch edges
         for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
             if attrs.get("type") != "switch_switch":
                 continue
-
-            # Verifica che gli attributi necessari esistano
             src_port = attrs.get("src_port")
             dst_port = attrs.get("dst_port")
             if src_port is None or dst_port is None:
-                print(f"[WARN] Edge {u}-{v} missing src_port/dst_port, skipping")
                 continue
-
-            src_port = str(src_port)
-            dst_port = str(dst_port)
-
             src_state = port_state_lookup.get((u, src_port), "unknown")
             dst_state = port_state_lookup.get((v, dst_port), "unknown")
-
             new_state = 1 if (src_state == "up" and dst_state == "up") else 0
             old_state = attrs.get("state", -1)
             if new_state != old_state:
@@ -135,7 +114,7 @@ class DigitalTwin:
             # Extract connection info
             port_info = host["port"]
             switch_dpid = port_info["dpid"]
-            switch_port = port_info["port_no"]
+            switch_port = int(port_info["port_no"], 16)
             ipv4 = host.get("ipv4", [])
             ipv6 = host.get("ipv6", [])
             # Add host node if not exists
@@ -186,49 +165,36 @@ class DigitalTwin:
             self.graph.nodes[dpid]["flows"] = flows
 
     def update_host_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
-        """
-        Update host-switch edge states based on port admin/operational status.
-        portdesc_dict: mapping dpid_hex -> list of port descriptions from /stats/portdesc/<dpid>
-        A port is considered DOWN if:
-          - config has OFPPC_PORT_DOWN (bit 0) set, OR
-          - state has OFPPS_LINK_DOWN (bit 0) set.
-        """
         if not portdesc_dict:
             return
         for dpid, ports in portdesc_dict.items():
             if not self.graph.has_node(dpid):
                 continue
-
             port_state_map = {}
             for p in ports:
-                port_no = str(p.get("port_no"))
-                # Ignore LOCAL port (not relevant for host links)
+                port_no = p.get("port_no")
                 if port_no == "LOCAL":
                     continue
+                if isinstance(port_no, str) and port_no.isdigit():
+                    port_no = int(port_no)
                 config = p.get("config", 0)
                 state = p.get("state", 0)
-                # Down if admin down (config bit 0) OR link down (state bit 0)
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_map[port_no] = "down" if is_down else "up"
-                # print(f"[DEBUG] Switch {dpid} port {port_no}: config={config}, state={state} -> {port_state_map[port_no]}")
 
-            # Update each host-switch edge that uses this switch
             for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
                 if attrs.get("type") != "host_switch":
                     continue
-                # Identify switch and port
                 if self.graph.nodes[u].get("type") == "switch":
                     sw, host = u, v
-                    sw_port = str(attrs.get("switch_port"))
+                    sw_port = attrs.get("switch_port")
                 elif self.graph.nodes[v].get("type") == "switch":
                     sw, host = v, u
-                    sw_port = str(attrs.get("switch_port"))
+                    sw_port = attrs.get("switch_port")
                 else:
                     continue
-
                 if sw != dpid:
                     continue
-
                 if sw_port in port_state_map:
                     new_state = port_state_map[sw_port]
                     old_state = attrs.get("state", "unknown")
