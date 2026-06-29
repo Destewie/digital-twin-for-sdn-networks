@@ -211,7 +211,7 @@ class DigitalTwin:
                 # Down if admin down (config bit 0) OR link down (state bit 0)
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_map[port_no] = "down" if is_down else "up"
-                print(f"[DEBUG] Switch {dpid} port {port_no}: config={config}, state={state} -> {port_state_map[port_no]}")
+                # print(f"[DEBUG] Switch {dpid} port {port_no}: config={config}, state={state} -> {port_state_map[port_no]}")
 
             # Update each host-switch edge that uses this switch
             for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
@@ -267,9 +267,9 @@ class DigitalTwin:
         for nid in removed_nodes:
             print(f"[CHANGE] Node removed: {nid} ({prev_nodes[nid]['type']})")
         # Node attribute changes (simplified: check if whole dict changed)
-        for nid in set(prev_nodes.keys()) & set(curr_nodes.keys()):
-            if prev_nodes[nid] != curr_nodes[nid]:
-                print(f"[CHANGE] Node {nid} attributes updated.")
+        # for nid in set(prev_nodes.keys()) & set(curr_nodes.keys()):
+        #     if prev_nodes[nid] != curr_nodes[nid]:
+        #         print(f"[CHANGE] Node {nid} attributes updated.")
 
         # Edges added/removed
         added_edges = set(curr_edges.keys()) - set(prev_edges.keys())
