@@ -45,6 +45,10 @@ class DigitalTwin:
                 self.graph.remove_node(node)
 
     def update_links(self, links_data: Optional[List[Dict]]):
+        """
+        Aggiorna i link switch-switch usando una chiave simmetrica
+        (ignora la direzione per evitare duplicati).
+        """
         if links_data is None:
             return
         current_links = set()
@@ -53,18 +57,21 @@ class DigitalTwin:
             dst = link["dst"]["dpid"]
             src_port = int(link["src"]["port_no"], 16)
             dst_port = int(link["dst"]["port_no"], 16)
-            key = (src, dst, src_port, dst_port)
+            # Crea una chiave ordinata (simmetrica)
+            endpoints = tuple(sorted([(src, src_port), (dst, dst_port)]))
+            key = endpoints
             current_links.add(key)
+            # Se l'arco non esiste, lo aggiungiamo
             if not self.graph.has_edge(src, dst, key=key):
                 self.graph.add_edge(src, dst, key=key, type="switch_switch",
                                     src_port=src_port, dst_port=dst_port, state=-1)
+            else:
+                # Se esiste già, non facciamo nulla (le porte non cambiano)
+                pass
         # Rimuovi link non più presenti
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
             if data.get("type") == "switch_switch":
-                key = (u, v, data.get("src_port"), data.get("dst_port"))
-                if None in key:
-                    continue
-                if key not in current_links:
+                if k not in current_links:
                     self.graph.remove_edge(u, v, k)
 
     def update_switch_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
