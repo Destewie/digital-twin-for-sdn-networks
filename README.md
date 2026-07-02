@@ -65,11 +65,14 @@ On the mininet cli
 ```py s1.attach('s1-eth4')```  
 ```py s2.attach('s2-eth1')```  
 ```py s2.attach('s2-eth2')```  
+```py s2.start([net.controllers[0]])```
+
   
 ### Remove a switch
 ```py net.delSwitch(s1)```  
 
+### Note postume
+- A volte è di aiuto a mininet esplicitare un link appena creato come 'up':  
+```link h3 s3 up```
+- Dare ```py net.start()``` a mininet a runtime rompe alcune configurazioni di rete; soprattutto degli switch/host che hai aggiunto a runtime.
 
-# TODO:
-Ora aggiungere un host alla linear,2 funziona senza sbatti. \ 
-Però capisci come aggiungere host alla single,2 in modo che funzioni sempre. \
