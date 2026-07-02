@@ -44,7 +44,7 @@ class DigitalTwin:
             if self.graph.nodes[node].get("type") == "switch" and node not in current_dpids:
                 self.graph.remove_node(node)
 
-    def update_links(self, links_data: Optional[List[Dict]]):
+       def update_links(self, links_data: Optional[List[Dict]]):
         """
         Aggiorna i link switch-switch usando una chiave simmetrica
         (ignora la direzione per evitare duplicati).
@@ -339,14 +339,24 @@ class DigitalTwin:
 
     def simulate_impact(self) -> dict:
         """
-        Analyse the impact of hypothetical changes.
-        Returns a dict with affected flows, hosts, and links.
+        Analizza l'impatto dei flussi ipotetici.
+        Un flusso reale è considerato affetto se il match ipotetico è un sotto-insieme del match reale.
         """
         impact = {
             "affected_flows": [],
             "affected_hosts": set(),
             "affected_links": set()
         }
+
+        def is_subset(hypo_match, real_match):
+            """Verifica se tutte le chiavi di hypo_match sono in real_match con lo stesso valore."""
+            if not hypo_match:
+                return True  # match vuoto cattura tutto
+            for key, value in hypo_match.items():
+                if key not in real_match or real_match[key] != value:
+                    return False
+            return True
+
         for sw, attrs in self.graph.nodes(data=True):
             if attrs.get("type") != "switch":
                 continue
@@ -354,16 +364,15 @@ class DigitalTwin:
             hypo_flows = attrs.get("hypothetical_flows", [])
             for hf in hypo_flows:
                 for rf in real_flows:
-                    # Simple overlap: exact match of match dict (can be refined)
-                    if rf.get("match") == hf["match"]:
+                    if is_subset(hf["match"], rf.get("match", {})):
                         impact["affected_flows"].append({
                             "switch": sw,
                             "real_flow": rf,
                             "hypothetical": hf
                         })
-                        # Track hosts via MAC addresses
+                        # Estrae MAC dai match
                         for field in ["dl_src", "dl_dst", "nw_src", "nw_dst"]:
-                            if field in rf["match"]:
+                            if field in rf.get("match", {}):
                                 impact["affected_hosts"].add(rf["match"][field])
         return impact
 
