@@ -92,6 +92,9 @@ class DTCli(cmd.Cmd):
             print("Usage: whatif <dpid> <match_json> <actions_json> <priority>")
             return
         dpid, match_str, actions_str, priority_str = parts
+        # Rimuovi eventuali virgolette esterne (singole o doppie) e spazi
+        match_str = match_str.strip().strip("'\"").strip()
+        actions_str = actions_str.strip().strip("'\"").strip()
         try:
             match = json.loads(match_str)
             actions = json.loads(actions_str)
