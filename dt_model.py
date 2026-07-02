@@ -44,7 +44,7 @@ class DigitalTwin:
             if self.graph.nodes[node].get("type") == "switch" and node not in current_dpids:
                 self.graph.remove_node(node)
 
-       def update_links(self, links_data: Optional[List[Dict]]):
+    def update_links(self, links_data: Optional[List[Dict]]):
         """
         Aggiorna i link switch-switch usando una chiave simmetrica
         (ignora la direzione per evitare duplicati).
