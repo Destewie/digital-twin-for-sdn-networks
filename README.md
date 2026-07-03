@@ -72,7 +72,29 @@ On the mininet cli
 ```py net.delSwitch(s1)```  
 
 ### Note postume
-- A volte è di aiuto a mininet esplicitare un link appena creato come 'up':  
-```link h3 s3 up```
-- Dare ```py net.start()``` a mininet a runtime rompe alcune configurazioni di rete; soprattutto degli switch/host che hai aggiunto a runtime.
+- Launching ```py net.start()``` in mininet at runtime breaks some network condiguations; expecially in switches and hosts that you created in runtime.
+- Remember to ```sudo mn -c``` every time that you exit from a mininet simulation
+
+# How to interact with the digital twin
+It is possible to use a handy CLI! \
+Just type 'help' or '?' to see the available commands. \
+If you want to know more about a specific command, you can do help <command>. \
+
+Available digital twin commands:
+- help
+- summary
+- hosts
+- switches
+- links
+- flows
+- whatif 
+- save
+- quit
+
+## Whatif command
+Detects which flows will be affected by a potential new rule. \ 
+Examples:
+- ```whatif 0000000000000001 '{"in_port":1}' '["DROP"]' 10```
+- ```whatif 0000000000000001 '{"dl_src":"00:00:00:00:00:01","dl_dst":"00:00:00:00:00:02"}' '["OUTPUT:3"]' 5```
+- ```whatif 0000000000000001 '{"in_port":1,"dl_src":"00:00:00:00:00:01"}' '["OUTPUT:3"]' 10```
 
