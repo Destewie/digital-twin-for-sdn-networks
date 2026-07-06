@@ -24,8 +24,9 @@ class DigitalTwin:
     # ----------------------------------------------------------------------
     def update_switches(self, switches_data: Optional[List[Dict]]):
         """
-        switches_data: list from /v1.0/topology/switches
+        for the switches_data i can ask the api: /v1.0/topology/switches
         Each element: {"dpid": "0000...", "ports": [{"port_no": "...", "name": "...", "hw_addr": "..."}, ...]}
+        dpid = datapath ID
         """
         if switches_data is None:
             return
@@ -33,21 +34,23 @@ class DigitalTwin:
         for sw in switches_data:
             dpid = sw["dpid"]
             current_dpids.add(dpid)
-            # Add node if not exists
+            # Add node to the graph if it doesn't exist
             if not self.graph.has_node(dpid):
                 self.graph.add_node(dpid, type="switch", dpid=dpid, ports=sw["ports"], port_stats={}, flows=[])
             else:
-                # Update ports list (could change)
+                # Update the switch ports list 
                 self.graph.nodes[dpid]["ports"] = sw["ports"]
-        # Remove switches no longer present
+
+        # Remove switches that are no longer present 
+        # -> they are in the digital twin graph, but not in the api response
         for node in list(self.graph.nodes):
             if self.graph.nodes[node].get("type") == "switch" and node not in current_dpids:
                 self.graph.remove_node(node)
 
     def update_links(self, links_data: Optional[List[Dict]]):
         """
-        Aggiorna i link switch-switch usando una chiave simmetrica
-        (ignora la direzione per evitare duplicati).
+        Update switch-switch links with a symmetric key
+        (ignore link direction to avoid duplicates).
         """
         if links_data is None:
             return
@@ -57,18 +60,16 @@ class DigitalTwin:
             dst = link["dst"]["dpid"]
             src_port = int(link["src"]["port_no"], 16)
             dst_port = int(link["dst"]["port_no"], 16)
-            # Crea una chiave ordinata (simmetrica)
+            # Create an ordered key based on the src device, src port, dst device, dst port
             endpoints = tuple(sorted([(src, src_port), (dst, dst_port)]))
             key = endpoints
             current_links.add(key)
-            # Se l'arco non esiste, lo aggiungiamo
+            # If the link doesn't exist, let's add it
             if not self.graph.has_edge(src, dst, key=key):
                 self.graph.add_edge(src, dst, key=key, type="switch_switch",
                                     src_port=src_port, dst_port=dst_port, state=-1)
-            else:
-                # Se esiste già, non facciamo nulla (le porte non cambiano)
-                pass
-        # Rimuovi link non più presenti
+
+        # Remove links that are no longer present
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
             if data.get("type") == "switch_switch":
                 if k not in current_links:
@@ -81,12 +82,17 @@ class DigitalTwin:
         for dpid, ports in portdesc_dict.items():
             for p in ports:
                 port_no = p.get("port_no")
+                # we don't care about localhost/loopback
                 if port_no == "LOCAL":
                     continue
+                # isinstance checks wether port_no is of class str
+                # isdigit() checks if all characters in a string are digits
                 if isinstance(port_no, str) and port_no.isdigit():
                     port_no = int(port_no)
                 config = p.get("config", 0)
                 state = p.get("state", 0)
+                # I use & 1 to focus only on the first (less significant bit of the value.)
+                # it could be either 0 or 1. Indipendentely if the integer number that is raffiguring
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_lookup[(dpid, port_no)] = "down" if is_down else "up"
 
@@ -97,8 +103,10 @@ class DigitalTwin:
             dst_port = attrs.get("dst_port")
             if src_port is None or dst_port is None:
                 continue
+            # I set the port state to unknown as a default if the searched key doesn't pop up
             src_state = port_state_lookup.get((u, src_port), "unknown")
             dst_state = port_state_lookup.get((v, dst_port), "unknown")
+            # Note: Even if it gets labeled as "unknown", here i put it as DOWN
             new_state = 1 if (src_state == "up" and dst_state == "up") else 0
             old_state = attrs.get("state", -1)
             if new_state != old_state:
@@ -109,7 +117,7 @@ class DigitalTwin:
 
     def update_hosts(self, hosts_data: Optional[List[Dict]]):
         """
-        hosts_data: list from /v1.0/topology/hosts
+        for the switches_data i can ask the api: /v1.0/topology/hosts
         Each element: {"mac": "...", "ipv4": [...], "port": {"dpid": "...", "port_no": "...", ...}, ...}
         """
         if hosts_data is None:
