@@ -30,7 +30,7 @@ On one terminal:
 On another terminal:  
 ```sudo mn --topo single,2 --mac --switch ovsk --controller remote```  
 
-*Alternative topology:*  
+*Alternative topology:*   
 ```sudo mn --topo linear,2 --mac --switch ovsk --controller remote```  
 
 
