@@ -1,8 +1,9 @@
-**Networking 2** *(a.k.a. Softwarized and virtualized mobile networks)* **project** (at UniTrento).  
-Professor: Fabrizio Granelli.
+# **Softwarized and virtualized mobile networks project** 
+*@UniTrento*  
+Professor: Fabrizio Granelli
 
 ## Project requirements:
-- GOAL: To buid a script that allows to generate the Digital Twin of an SDN network
+**GOAL**: To buid a script that allows to generate the Digital Twin of an SDN network
 - Exploit RYU Northbound RestAPI to retrieve the topology- and traffic-related information
 - The procedure should be completely automated
 - Runtime, changes to the Physical Twin are reproduced automatically to the Digital Twin
@@ -10,30 +11,39 @@ Professor: Fabrizio Granelli.
 ---
 
 ## How to start everything
-#### Open terminals
+### Open terminals
 Open at least 3 of them:
 - one for mininet
 - one for the ryu controller
 - one for the digital twin script
 
-#### Spin up and connect to the vms
+### Spin up and connect to the vms
 On every terminal:  
-```vagrant up```  
+```vagrant up --provider=libvirt```  
 ```vagrant ssh```    
 
-#### Start the mininet simulation
+### Start a ryu controller  
 On one terminal:  
-```sudo mn --topo single,2 --mac --switch ovsk --controller remote```  
-
-*Alternative topology:*
-```sudo mn --topo linear,2 --mac --switch ovsk --controller remote```  
-
-#### Start a ryu controller  
-On another terminal:  
 ```ryu-manager --verbose --observe-links ryu.app.rest_topology ryu.app.ofctl_rest ryu.app.simple_switch_13```  
 
-#### Finally start the digital twin script
+### Start the mininet simulation
+On another terminal:  
+```sudo mn --topo single,2 --mac --switch ovsk --controller remote```  
+
+*Alternative topology:*  
+```sudo mn --topo linear,2 --mac --switch ovsk --controller remote```  
+
+
+### Finally start the digital twin script
 On the last terminal:  
+
+1. Clone this repository inside the comnetsemu VM:  
+```git clone https://github.com/Destewie/digital-twin-for-sdn-networks.git```
+
+2. Install python dependencies inside the comnetsemu VM:  
+```pip install networkx requests```
+
+3. Start the digital twin:  
 ```cd digital-twin-for-sdn-networks```  
 ```python3 main.py --interval 2```  
 
@@ -41,10 +51,10 @@ On the last terminal:
 
 ## How to modify the mininet network through its CLI
 ### Disable/enable a link
-On the mininet cli  
-- ```link h2 s1 down```  
-- ```pingall```  
-- ```link h2 s1 up```  
+On the mininet CLI  
+```link h2 s1 down```  
+```pingall```  
+```link h2 s1 up```  
 
 
 ### Add a host
@@ -57,9 +67,9 @@ On the mininet cli
   
 ### Add a switch and a host
 ```py net.addSwitch('s2')```  
-```py net.addLink(s1, s2)``` -> *this will create s1-eth4 and s2-eth1*  
+```py net.addLink(s1, s2)```
 ```py net.addHost('h4')```  
-```py net.addLink(h4, s2)``` -> *this will create s2-eth2*  
+```py net.addLink(h4, s2)```
 ```py h4.setIP('10.0.0.4/8')```  
 ```py h4.setMAC('00:00:00:00:00:04')```  
 ```py s1.attach('s1-eth4')```  
@@ -71,16 +81,16 @@ On the mininet cli
 ### Remove a switch
 ```py net.delSwitch(s1)```  
 
-### Note postume
-- Launching ```py net.start()``` in mininet at runtime breaks some network condiguations; expecially in switches and hosts that you created in runtime.
+### Useful side-notes
+- Launching ```py net.start()``` in mininet at runtime breaks some network configuations; expecially in switches and hosts that you created at runtime
 - Remember to ```sudo mn -c``` every time that you exit from a mininet simulation
 
 # How to interact with the digital twin
-It is possible to use a handy CLI! \
-Just type 'help' or '?' to see the available commands. \
-If you want to know more about a specific command, you can do help <command>. \
+It is possible to use a handy CLI!  
+Just type 'help' or '?' to see the available commands.  
+If you want to know more about a specific command, you can do help <command>.  
 
-Available digital twin commands:
+Available digital twin CLI commands:
 - help
 - summary
 - hosts
@@ -97,4 +107,3 @@ Examples:
 - ```whatif 0000000000000001 '{"in_port":1}' '["DROP"]' 10```
 - ```whatif 0000000000000001 '{"dl_src":"00:00:00:00:00:01","dl_dst":"00:00:00:00:00:02"}' '["OUTPUT:3"]' 5```
 - ```whatif 0000000000000001 '{"in_port":1,"dl_src":"00:00:00:00:00:01"}' '["OUTPUT:3"]' 10```
-

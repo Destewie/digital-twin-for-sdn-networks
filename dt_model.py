@@ -7,10 +7,11 @@ Stores:
 - Port statistics and flow statistics as node attributes.
 """
 
-import networkx as nx
 import json
-from typing import Dict, List, Any, Optional, Tuple
-import copy
+from typing import Dict, List, Optional
+
+import networkx as nx
+
 
 class DigitalTwin:
     def __init__(self):
@@ -36,15 +37,25 @@ class DigitalTwin:
             current_dpids.add(dpid)
             # Add node to the graph if it doesn't exist
             if not self.graph.has_node(dpid):
-                self.graph.add_node(dpid, type="switch", dpid=dpid, ports=sw["ports"], port_stats={}, flows=[])
+                self.graph.add_node(
+                    dpid,
+                    type="switch",
+                    dpid=dpid,
+                    ports=sw["ports"],
+                    port_stats={},
+                    flows=[],
+                )
             else:
-                # Update the switch ports list 
+                # Update the switch ports list
                 self.graph.nodes[dpid]["ports"] = sw["ports"]
 
-        # Remove switches that are no longer present 
+        # Remove switches that are no longer present
         # -> they are in the digital twin graph, but not in the api response
         for node in list(self.graph.nodes):
-            if self.graph.nodes[node].get("type") == "switch" and node not in current_dpids:
+            if (
+                self.graph.nodes[node].get("type") == "switch"
+                and node not in current_dpids
+            ):
                 self.graph.remove_node(node)
 
     def update_links(self, links_data: Optional[List[Dict]]):
@@ -66,8 +77,15 @@ class DigitalTwin:
             current_links.add(key)
             # If the link doesn't exist, let's add it
             if not self.graph.has_edge(src, dst, key=key):
-                self.graph.add_edge(src, dst, key=key, type="switch_switch",
-                                    src_port=src_port, dst_port=dst_port, state=-1)
+                self.graph.add_edge(
+                    src,
+                    dst,
+                    key=key,
+                    type="switch_switch",
+                    src_port=src_port,
+                    dst_port=dst_port,
+                    state=-1,
+                )
 
         # Remove links that are no longer present
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
@@ -112,8 +130,9 @@ class DigitalTwin:
             if new_state != old_state:
                 self.graph[u][v][key]["state"] = new_state
                 status = "UP" if new_state == 1 else "DOWN"
-                print(f"[STATE] Switch link {u}:{src_port} <-> {v}:{dst_port} is now {status}")
-
+                print(
+                    f"[STATE] Switch link {u}:{src_port} <-> {v}:{dst_port} is now {status}"
+                )
 
     def update_hosts(self, hosts_data: Optional[List[Dict]]):
         """
@@ -134,8 +153,15 @@ class DigitalTwin:
             ipv6 = host.get("ipv6", [])
             # Add host node if not exists
             if not self.graph.has_node(mac):
-                self.graph.add_node(mac, type="host", mac=mac, ipv4=ipv4, ipv6=ipv6,
-                                    connected_to=switch_dpid, connected_port=switch_port)
+                self.graph.add_node(
+                    mac,
+                    type="host",
+                    mac=mac,
+                    ipv4=ipv4,
+                    ipv6=ipv6,
+                    connected_to=switch_dpid,
+                    connected_port=switch_port,
+                )
             else:
                 # Update existing host attributes (IPs may change)
                 self.graph.nodes[mac]["ipv4"] = ipv4
@@ -145,14 +171,24 @@ class DigitalTwin:
             # Add/update host‑switch edge
             edge_key = (mac, switch_dpid, "host_switch")
             if not self.graph.has_edge(mac, switch_dpid, key=edge_key):
-                self.graph.add_edge(mac, switch_dpid, key=edge_key, type="host_switch",
-                                    host_mac=mac, switch_port=switch_port, state="up")
+                self.graph.add_edge(
+                    mac,
+                    switch_dpid,
+                    key=edge_key,
+                    type="host_switch",
+                    host_mac=mac,
+                    switch_port=switch_port,
+                    state="up",
+                )
             else:
                 # Update state just in case
                 self.graph[mac][switch_dpid][edge_key]["state"] = "up"
         # Remove hosts no longer present
         for node in list(self.graph.nodes):
-            if self.graph.nodes[node].get("type") == "host" and node not in current_host_macs:
+            if (
+                self.graph.nodes[node].get("type") == "host"
+                and node not in current_host_macs
+            ):
                 self.graph.remove_node(node)
 
     def update_port_stats(self, port_stats_dict: Dict[str, List[Dict]]):
@@ -215,7 +251,9 @@ class DigitalTwin:
                     old_state = attrs.get("state", "unknown")
                     if new_state != old_state:
                         self.graph[u][v][key]["state"] = new_state
-                        print(f"[STATE] Host {host} link to switch {sw} port {sw_port} is now {new_state}")
+                        print(
+                            f"[STATE] Host {host} link to switch {sw} port {sw_port} is now {new_state}"
+                        )
 
     # ----------------------------------------------------------------------
     # Diff & logging
@@ -312,24 +350,35 @@ class DigitalTwin:
     # ----------------------------------------------------------------------
     def summary(self) -> str:
         """Return a short summary of the twin."""
-        switches = [n for n, d in self.graph.nodes(data=True) if d.get("type") == "switch"]
+        switches = [
+            n for n, d in self.graph.nodes(data=True) if d.get("type") == "switch"
+        ]
         hosts = [n for n, d in self.graph.nodes(data=True) if d.get("type") == "host"]
-        links = [(u, v) for u, v, d in self.graph.edges(data=True) if d.get("type") == "switch_switch"]
-        return (f"Digital Twin: {len(switches)} switches, {len(hosts)} hosts, "
-                f"{len(links)} switch‑switch links.")
+        links = [
+            (u, v)
+            for u, v, d in self.graph.edges(data=True)
+            if d.get("type") == "switch_switch"
+        ]
+        return (
+            f"Digital Twin: {len(switches)} switches, {len(hosts)} hosts, "
+            f"{len(links)} switch‑switch links."
+        )
 
     # ----------------------------------------------------------------------
     # What‑If Simulation
     # ----------------------------------------------------------------------
-    def clone(self) -> 'DigitalTwin':
+    def clone(self) -> "DigitalTwin":
         """Return a deep copy of the twin (detached from the real network)."""
         import copy
+
         new_twin = DigitalTwin()
         new_twin.graph = copy.deepcopy(self.graph)
         new_twin._prev_state = None
         return new_twin
 
-    def add_hypothetical_flow(self, dpid: str, match: dict, actions: list, priority: int = 1):
+    def add_hypothetical_flow(
+        self, dpid: str, match: dict, actions: list, priority: int = 1
+    ):
         """
         Add a hypothetical flow rule to a switch in the twin.
         This does NOT affect the real network.
@@ -338,12 +387,14 @@ class DigitalTwin:
             raise ValueError(f"Switch {dpid} not found")
         if "hypothetical_flows" not in self.graph.nodes[dpid]:
             self.graph.nodes[dpid]["hypothetical_flows"] = []
-        self.graph.nodes[dpid]["hypothetical_flows"].append({
-            "match": match,
-            "actions": actions,
-            "priority": priority,
-            "hypothetical": True
-        })
+        self.graph.nodes[dpid]["hypothetical_flows"].append(
+            {
+                "match": match,
+                "actions": actions,
+                "priority": priority,
+                "hypothetical": True,
+            }
+        )
 
     def simulate_impact(self) -> dict:
         """
@@ -353,7 +404,7 @@ class DigitalTwin:
         impact = {
             "affected_flows": [],
             "affected_hosts": set(),
-            "affected_links": set()
+            "affected_links": set(),
         }
 
         def is_subset(hypo_match, real_match):
@@ -373,16 +424,15 @@ class DigitalTwin:
             for hf in hypo_flows:
                 for rf in real_flows:
                     if is_subset(hf["match"], rf.get("match", {})):
-                        impact["affected_flows"].append({
-                            "switch": sw,
-                            "real_flow": rf,
-                            "hypothetical": hf
-                        })
+                        impact["affected_flows"].append(
+                            {"switch": sw, "real_flow": rf, "hypothetical": hf}
+                        )
                         # Estrae MAC dai match
                         for field in ["dl_src", "dl_dst", "nw_src", "nw_dst"]:
                             if field in rf.get("match", {}):
                                 impact["affected_hosts"].add(rf["match"][field])
         return impact
+
 
 # ----------------------------------------------------------------------
 # Quick test (to be run after rest_client works)
