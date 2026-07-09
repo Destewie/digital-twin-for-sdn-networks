@@ -2,12 +2,14 @@
 dt_sync.py - Periodically fetch data from Ryu and update the Digital Twin.
 """
 
-import time
 import signal
 import sys
+import time
 from typing import Optional
-from rest_client import RyuRestClient
+
 from dt_model import DigitalTwin
+from rest_client import RyuRestClient
+
 
 class DigitalTwinSync:
     def __init__(self, ryu_url: str, dt: DigitalTwin, interval: float = 2.0):
@@ -35,12 +37,12 @@ class DigitalTwinSync:
             # 2. Statistics per switch
             port_stats_dict = {}
             flow_stats_dict = {}
-            portdesc_dict = {}  # new: for port state
+            portdesc_dict = {}
             for sw in switches:
                 dpid = sw["dpid"]
                 port_stats = self.client.get_port_stats(dpid)
                 flow_stats = self.client.get_flow_stats(dpid)
-                port_desc = self.client.get_port_description(dpid)  # we already implemented this
+                port_desc = self.client.get_port_description(dpid)
                 if port_stats:
                     port_stats_dict[dpid] = port_stats
                 if flow_stats:
@@ -50,8 +52,8 @@ class DigitalTwinSync:
 
             self.dt.update_port_stats(port_stats_dict)
             self.dt.update_flow_stats(flow_stats_dict)
-            self.dt.update_host_link_states(portdesc_dict)   # new call
-            self.dt.update_switch_link_states(portdesc_dict) 
+            self.dt.update_host_link_states(portdesc_dict)
+            self.dt.update_switch_link_states(portdesc_dict)
 
             # 3. Compare with previous state
             current_state = self.dt.to_dict()
@@ -63,6 +65,7 @@ class DigitalTwinSync:
 
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             print(f"[ERROR] Exception in sync cycle: {e}")
             return False
@@ -82,9 +85,11 @@ class DigitalTwinSync:
     def stop(self):
         self.running = False
 
+
 def signal_handler(sync_loop, signum, frame):
     print("\n[INFO] Received SIGINT, stopping sync loop...")
     sync_loop.stop()
+
 
 def start_sync(ryu_url: str = "http://127.0.0.1:8080", interval: float = 2.0):
     dt = DigitalTwin()
@@ -100,6 +105,7 @@ def start_sync(ryu_url: str = "http://127.0.0.1:8080", interval: float = 2.0):
         # Optional: save final state
         dt.to_json("dt_final_state.json")
         print("[INFO] Final twin saved to dt_final_state.json")
+
 
 if __name__ == "__main__":
     # If run directly, start sync with default parameters

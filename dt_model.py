@@ -25,7 +25,7 @@ class DigitalTwin:
     # ----------------------------------------------------------------------
     def update_switches(self, switches_data: Optional[List[Dict]]):
         """
-        for the switches_data i can ask the api: /v1.0/topology/switches
+        The switches_data can be retrieved through the API: /v1.0/topology/switches
         Each element: {"dpid": "0000...", "ports": [{"port_no": "...", "name": "...", "hw_addr": "..."}, ...]}
         dpid = datapath ID
         """
@@ -42,11 +42,11 @@ class DigitalTwin:
                     type="switch",
                     dpid=dpid,
                     ports=sw["ports"],
-                    port_stats={},
-                    flows=[],
+                    port_stats={},  # Will be updated by update_port_stats()
+                    flows=[],  # Will be updated by update_flow_stats()
                 )
             else:
-                # Update the switch ports list
+                # If the switch already exists, update the switch ports list
                 self.graph.nodes[dpid]["ports"] = sw["ports"]
 
         # Remove switches that are no longer present
@@ -62,13 +62,15 @@ class DigitalTwin:
         """
         Update switch-switch links with a symmetric key
         (ignore link direction to avoid duplicates).
+        Edges in Networkx Multigraph are defined by src, dest, key, args**
         """
         if links_data is None:
             return
-        current_links = set()
+        current_links = set()  # this set will only contain link keys
         for link in links_data:
             src = link["src"]["dpid"]
             dst = link["dst"]["dpid"]
+            # Conversion of the dpid to int for coherence with other APIs
             src_port = int(link["src"]["port_no"], 16)
             dst_port = int(link["dst"]["port_no"], 16)
             # Create an ordered key based on the src device, src port, dst device, dst port
@@ -84,7 +86,7 @@ class DigitalTwin:
                     type="switch_switch",
                     src_port=src_port,
                     dst_port=dst_port,
-                    state=-1,
+                    state=-1,  # -1 = State unconfigured. It will be configured by update_switch_link_states
                 )
 
         # Remove links that are no longer present
@@ -100,20 +102,23 @@ class DigitalTwin:
         for dpid, ports in portdesc_dict.items():
             for p in ports:
                 port_no = p.get("port_no")
-                # we don't care about localhost/loopback
+                # we don't care about localhost/loopback when thinking about inter-switch links
                 if port_no == "LOCAL":
                     continue
                 # isinstance checks wether port_no is of class str
                 # isdigit() checks if all characters in a string are digits
                 if isinstance(port_no, str) and port_no.isdigit():
+                    # normalize the port number to be consistent with how I store them elsewhere
                     port_no = int(port_no)
                 config = p.get("config", 0)
                 state = p.get("state", 0)
                 # I use & 1 to focus only on the first (less significant bit of the value.)
-                # it could be either 0 or 1. Indipendentely if the integer number that is raffiguring
+                # it could be either 0 or 1. Indipendentely if the integer number that is raffiguring (every integer above or equal to 1 means that the port is down)
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_lookup[(dpid, port_no)] = "down" if is_down else "up"
 
+        # In the following loop if keys and data are not set to true, the get function wuold have returned tuples of (u, v).
+        # With these parameters set, the tuple will be (u, v, key, attrs)
         for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
             if attrs.get("type") != "switch_switch":
                 continue
@@ -136,8 +141,9 @@ class DigitalTwin:
 
     def update_hosts(self, hosts_data: Optional[List[Dict]]):
         """
-        for the switches_data i can ask the api: /v1.0/topology/hosts
+        The hosts_data can be retrieved through the API: /v1.0/topology/hosts
         Each element: {"mac": "...", "ipv4": [...], "port": {"dpid": "...", "port_no": "...", ...}, ...}
+        This function also creates links (or edges) between hosts and switches
         """
         if hosts_data is None:
             return
@@ -168,6 +174,7 @@ class DigitalTwin:
                 self.graph.nodes[mac]["ipv6"] = ipv6
                 self.graph.nodes[mac]["connected_to"] = switch_dpid
                 self.graph.nodes[mac]["connected_port"] = switch_port
+
             # Add/update host‑switch edge
             edge_key = (mac, switch_dpid, "host_switch")
             if not self.graph.has_edge(mac, switch_dpid, key=edge_key):
@@ -184,6 +191,8 @@ class DigitalTwin:
                 # Update state just in case
                 self.graph[mac][switch_dpid][edge_key]["state"] = "up"
         # Remove hosts no longer present
+        # list() fixes the list of nodes at the beginning of the cycle, while graph.nodes is dynamic
+        # I use the list() method to avoid runtime changes in self.graph.nodes.
         for node in list(self.graph.nodes):
             if (
                 self.graph.nodes[node].get("type") == "host"
@@ -198,7 +207,7 @@ class DigitalTwin:
         """
         for dpid, stats_list in port_stats_dict.items():
             if not self.graph.has_node(dpid):
-                continue
+                continue  # If the switch is not in the graph, it will be added by the update_switches function
             # Convert list to dict keyed by port_no for easier access
             stats_by_port = {}
             for pstat in stats_list:
@@ -212,7 +221,7 @@ class DigitalTwin:
         """
         for dpid, flows in flow_stats_dict.items():
             if not self.graph.has_node(dpid):
-                continue
+                continue  # If the switch is not in the graph, it will be added by the update_switches function
             self.graph.nodes[dpid]["flows"] = flows
 
     def update_host_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
@@ -221,7 +230,7 @@ class DigitalTwin:
         for dpid, ports in portdesc_dict.items():
             if not self.graph.has_node(dpid):
                 continue
-            port_state_map = {}
+            port_state_map = {}  # Where new port states will be saved
             for p in ports:
                 port_no = p.get("port_no")
                 if port_no == "LOCAL":
@@ -233,6 +242,7 @@ class DigitalTwin:
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_map[port_no] = "down" if is_down else "up"
 
+            # Here i go through every existing edge to update the link state based ok the port_state_map
             for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
                 if attrs.get("type") != "host_switch":
                     continue
@@ -260,8 +270,7 @@ class DigitalTwin:
     # ----------------------------------------------------------------------
     def compare_and_log(self, previous_state: Optional[Dict] = None):
         """
-        Compare current graph state with previous state (if provided)
-        and print differences.
+        Compare current graph state with previous state (if present) and print differences.
         previous_state should be a dict from to_dict().
         """
         if previous_state is None:
@@ -284,10 +293,6 @@ class DigitalTwin:
             print(f"[CHANGE] Node added: {nid} ({curr_nodes[nid]['type']})")
         for nid in removed_nodes:
             print(f"[CHANGE] Node removed: {nid} ({prev_nodes[nid]['type']})")
-        # Node attribute changes (simplified: check if whole dict changed)
-        # for nid in set(prev_nodes.keys()) & set(curr_nodes.keys()):
-        #     if prev_nodes[nid] != curr_nodes[nid]:
-        #         print(f"[CHANGE] Node {nid} attributes updated.")
 
         # Edges added/removed
         added_edges = set(curr_edges.keys()) - set(prev_edges.keys())
@@ -296,6 +301,7 @@ class DigitalTwin:
             print(f"[CHANGE] Edge added: {e[0]} - {e[1]} (key {e[2]})")
         for e in removed_edges:
             print(f"[CHANGE] Edge removed: {e[0]} - {e[1]} (key {e[2]})")
+
         # Edge attribute changes
         for e in set(prev_edges.keys()) & set(curr_edges.keys()):
             if prev_edges[e] != curr_edges[e]:
@@ -398,8 +404,8 @@ class DigitalTwin:
 
     def simulate_impact(self) -> dict:
         """
-        Analizza l'impatto dei flussi ipotetici.
-        Un flusso reale è considerato affetto se il match ipotetico è un sotto-insieme del match reale.
+        Analyze the impact of new hypotetical flows.
+        A real flow is considered "affected" if the hypotetical match is a subset of the real match.
         """
         impact = {
             "affected_flows": [],

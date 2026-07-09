@@ -87,8 +87,8 @@ On the mininet CLI
 
 # How to interact with the digital twin
 It is possible to use a handy CLI!  
-Just type 'help' or '?' to see the available commands.  
-If you want to know more about a specific command, you can do help <command>.  
+Just type ```help``` or ```?``` to see the available commands.  
+If you want to know more about a specific command, you can do ```help \<command\>```.  
 
 Available digital twin CLI commands:
 - help
