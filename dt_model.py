@@ -175,6 +175,17 @@ class DigitalTwin:
                 self.graph.nodes[mac]["connected_to"] = switch_dpid
                 self.graph.nodes[mac]["connected_port"] = switch_port
 
+            # Before adding new edges, I want to remove old switch-host edges
+            old_edges_to_remove = []
+            for u, v, k, attrs in self.graph.edges(keys=True, data=True):
+                if attrs.get("type") == "host_switch":
+                    if (u == mac and self.graph.nodes[v].get("type") == "switch") or (
+                        v == mac and self.graph.nodes[u].get("type") == "switch"
+                    ):
+                        old_edges_to_remove.append((u, v, k))
+            for u, v, k in old_edges_to_remove:
+                self.graph.remove_edge(u, v, k)
+
             # Add/update host‑switch edge
             edge_key = (mac, switch_dpid, "host_switch")
             if not self.graph.has_edge(mac, switch_dpid, key=edge_key):
@@ -189,6 +200,7 @@ class DigitalTwin:
                 )
             else:
                 # Update state just in case
+                # If it is not really up, don't worry! The state is going to be updated in the same sync cycle by update_host_link_states()
                 self.graph[mac][switch_dpid][edge_key]["state"] = "up"
         # Remove hosts no longer present
         # list() fixes the list of nodes at the beginning of the cycle, while graph.nodes is dynamic
@@ -242,7 +254,7 @@ class DigitalTwin:
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_map[port_no] = "down" if is_down else "up"
 
-            # Here i go through every existing edge to update the link state based ok the port_state_map
+            # Here i go through every existing edge to update the link state based on the port_state_map (so the effective actual state of the ports)
             for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
                 if attrs.get("type") != "host_switch":
                     continue

@@ -18,8 +18,9 @@ Open at least 3 of them:
 - one for the digital twin script
 
 ### Spin up and connect to the vms
+On one terminal:  
+```vagrant up --provider=libvirt```   
 On every terminal:  
-```vagrant up --provider=libvirt```  
 ```vagrant ssh```    
 
 ### Start a ryu controller  
@@ -107,3 +108,7 @@ Examples:
 - ```whatif 0000000000000001 '{"in_port":1}' '["DROP"]' 10```
 - ```whatif 0000000000000001 '{"dl_src":"00:00:00:00:00:01","dl_dst":"00:00:00:00:00:02"}' '["OUTPUT:3"]' 5```
 - ```whatif 0000000000000001 '{"in_port":1,"dl_src":"00:00:00:00:00:01"}' '["OUTPUT:3"]' 10```
+
+
+# Known bugs
+- Imagine the linear,2 topology. If I spawn a new node h3 and I attach it both to s1 and s2, when I delete the switch s1, the network configuration of h3 disappears, it is not configurable anymore and it also loses connectivity with the s2 (even if it should have been attached to it)
