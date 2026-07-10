@@ -60,9 +60,8 @@ class DigitalTwin:
 
     def update_links(self, links_data: Optional[List[Dict]]):
         """
-        Update switch-switch links with a symmetric key
-        (ignore link direction to avoid duplicates).
-        Edges in Networkx Multigraph are defined by src, dest, key, args**
+        Update switch-switch links using a canonical key that is independent of direction.
+        This avoids duplicate edges for a single physical link.
         """
         import re
 
@@ -70,17 +69,17 @@ class DigitalTwin:
             return
 
         def extract_port_from_name(name):
-            """Estrae il numero di porta da un nome tipo 's1-eth2'."""
+            """Extracts the port number from names such as 's1-eth2'."""
             match = re.search(r"eth(\d+)", name)
             if match:
                 return int(match.group(1))
             return None
 
-        current_links = set()
+        current_links = set()  # store canonical keys
+
         for link in links_data:
             src = link["src"]["dpid"]
             dst = link["dst"]["dpid"]
-            # Usa il nome per ottenere il port number, altrimenti fallback su port_no
             src_port = extract_port_from_name(link["src"].get("name", ""))
             if src_port is None:
                 src_port = int(link["src"]["port_no"], 16)
@@ -88,27 +87,32 @@ class DigitalTwin:
             if dst_port is None:
                 dst_port = int(link["dst"]["port_no"], 16)
 
-            key = (src, dst, src_port, dst_port)
-            current_links.add(key)
-            if not self.graph.has_edge(src, dst, key=key):
+            # Build a canonical key independent of direction
+            pair1 = (src, src_port)
+            pair2 = (dst, dst_port)
+            canonical_key = tuple(sorted([pair1, pair2]))
+
+            # Skip if we already processed this physical link
+            if canonical_key in current_links:
+                continue
+            current_links.add(canonical_key)
+
+            # Add the edge only once, using the canonical key
+            if not self.graph.has_edge(src, dst, key=canonical_key):
                 self.graph.add_edge(
                     src,
                     dst,
-                    key=key,
+                    key=canonical_key,
                     type="switch_switch",
                     src_port=src_port,
                     dst_port=dst_port,
                     state=-1,
                 )
-            # Nota: se l'arco esiste già, non aggiorniamo lo stato qui; lo farà update_switch_link_states
 
         # Remove links that are no longer present
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
             if data.get("type") == "switch_switch":
-                key = (u, v, data.get("src_port"), data.get("dst_port"))
-                if None in key:
-                    continue
-                if key not in current_links:
+                if k not in current_links:
                     self.graph.remove_edge(u, v, k)
 
     def update_switch_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
