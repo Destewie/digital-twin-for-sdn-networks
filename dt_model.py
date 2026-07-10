@@ -64,20 +64,32 @@ class DigitalTwin:
         (ignore link direction to avoid duplicates).
         Edges in Networkx Multigraph are defined by src, dest, key, args**
         """
+        import re
+
         if links_data is None:
             return
-        current_links = set()  # this set will only contain link keys
+
+        def extract_port_from_name(name):
+            """Estrae il numero di porta da un nome tipo 's1-eth2'."""
+            match = re.search(r"eth(\d+)", name)
+            if match:
+                return int(match.group(1))
+            return None
+
+        current_links = set()
         for link in links_data:
             src = link["src"]["dpid"]
             dst = link["dst"]["dpid"]
-            # Conversion of the dpid to int for coherence with other APIs
-            src_port = int(link["src"]["port_no"], 16)
-            dst_port = int(link["dst"]["port_no"], 16)
-            # Create an ordered key based on the src device, src port, dst device, dst port
-            endpoints = tuple(sorted([(src, src_port), (dst, dst_port)]))
-            key = endpoints
+            # Usa il nome per ottenere il port number, altrimenti fallback su port_no
+            src_port = extract_port_from_name(link["src"].get("name", ""))
+            if src_port is None:
+                src_port = int(link["src"]["port_no"], 16)
+            dst_port = extract_port_from_name(link["dst"].get("name", ""))
+            if dst_port is None:
+                dst_port = int(link["dst"]["port_no"], 16)
+
+            key = (src, dst, src_port, dst_port)
             current_links.add(key)
-            # If the link doesn't exist, let's add it
             if not self.graph.has_edge(src, dst, key=key):
                 self.graph.add_edge(
                     src,
@@ -86,13 +98,17 @@ class DigitalTwin:
                     type="switch_switch",
                     src_port=src_port,
                     dst_port=dst_port,
-                    state=-1,  # -1 = State unconfigured. It will be configured by update_switch_link_states
+                    state=-1,
                 )
+            # Nota: se l'arco esiste già, non aggiorniamo lo stato qui; lo farà update_switch_link_states
 
         # Remove links that are no longer present
         for u, v, k, data in list(self.graph.edges(keys=True, data=True)):
             if data.get("type") == "switch_switch":
-                if k not in current_links:
+                key = (u, v, data.get("src_port"), data.get("dst_port"))
+                if None in key:
+                    continue
+                if key not in current_links:
                     self.graph.remove_edge(u, v, k)
 
     def update_switch_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
