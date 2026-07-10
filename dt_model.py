@@ -19,6 +19,7 @@ class DigitalTwin:
         self.graph = nx.MultiGraph()
         # Keep track of previous state for diff logging
         self._prev_state = None
+        self._last_logged_state = {}  # to avoid continuous shell prints of new ports/hosts/link states (that are not really new)
 
     # ----------------------------------------------------------------------
     # Core update methods (called by sync loop)
@@ -211,7 +212,6 @@ class DigitalTwin:
                 )
             else:
                 # Update state just in case
-                # If it is not really up, don't worry! The state is going to be updated in the same sync cycle by update_host_link_states()
                 self.graph[mac][switch_dpid][edge_key]["switch_port"] = switch_port
         # Remove hosts no longer present
         # list() fixes the list of nodes at the beginning of the cycle, while graph.nodes is dynamic
@@ -284,9 +284,13 @@ class DigitalTwin:
                     old_state = attrs.get("state", "unknown")
                     if new_state != old_state:
                         self.graph[u][v][key]["state"] = new_state
-                        print(
-                            f"[STATE] Host {host} link to switch {sw} port {sw_port} is now {new_state}"
-                        )
+                        # Only log if this state is different from the last logged state
+                        cache_key = (host, sw, sw_port)
+                        if self._last_logged_state.get(cache_key) != new_state:
+                            self._last_logged_state[cache_key] = new_state
+                            print(
+                                f"[STATE] Host {host} link to switch {sw} port {sw_port} is now {new_state}"
+                            )
 
     # ----------------------------------------------------------------------
     # Diff & logging
