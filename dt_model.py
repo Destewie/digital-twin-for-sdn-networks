@@ -60,32 +60,19 @@ class DigitalTwin:
 
     def update_links(self, links_data: Optional[List[Dict]]):
         """
-        Update switch-switch links using a canonical key that is independent of direction.
-        This avoids duplicate edges for a single physical link.
+        Update switch-switch links using a canonical key independent of direction.
+        Port numbers are taken directly from the port_no field (converted from hex).
         """
-        import re
-
         if links_data is None:
             return
 
-        def extract_port_from_name(name):
-            """Extracts the port number from names such as 's1-eth2'."""
-            match = re.search(r"eth(\d+)", name)
-            if match:
-                return int(match.group(1))
-            return None
-
-        current_links = set()  # store canonical keys
+        current_links = set()  # canonical keys
 
         for link in links_data:
             src = link["src"]["dpid"]
             dst = link["dst"]["dpid"]
-            src_port = extract_port_from_name(link["src"].get("name", ""))
-            if src_port is None:
-                src_port = int(link["src"]["port_no"], 16)
-            dst_port = extract_port_from_name(link["dst"].get("name", ""))
-            if dst_port is None:
-                dst_port = int(link["dst"]["port_no"], 16)
+            src_port = int(link["src"]["port_no"], 16)
+            dst_port = int(link["dst"]["port_no"], 16)
 
             # Build a canonical key independent of direction
             pair1 = (src, src_port)
