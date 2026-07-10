@@ -61,12 +61,12 @@ class DigitalTwin:
     def update_links(self, links_data: Optional[List[Dict]]):
         """
         Update switch-switch links using a canonical key independent of direction.
-        Port numbers are taken directly from the port_no field (converted from hex).
+        Port numbers are taken from port_no and stored in the canonical key.
         """
         if links_data is None:
             return
 
-        current_links = set()  # canonical keys
+        current_links = set()
 
         for link in links_data:
             src = link["src"]["dpid"]
@@ -74,25 +74,23 @@ class DigitalTwin:
             src_port = int(link["src"]["port_no"], 16)
             dst_port = int(link["dst"]["port_no"], 16)
 
-            # Build a canonical key independent of direction
+            # Canonical key: sorted tuple of (dpid, port)
             pair1 = (src, src_port)
             pair2 = (dst, dst_port)
             canonical_key = tuple(sorted([pair1, pair2]))
 
-            # Skip if we already processed this physical link
             if canonical_key in current_links:
                 continue
             current_links.add(canonical_key)
 
-            # Add the edge only once, using the canonical key
+            # Add edge with canonical key as edge key
+            # No src_port/dst_port attributes needed — they are in the key
             if not self.graph.has_edge(src, dst, key=canonical_key):
                 self.graph.add_edge(
                     src,
                     dst,
                     key=canonical_key,
                     type="switch_switch",
-                    src_port=src_port,
-                    dst_port=dst_port,
                     state=-1,
                 )
 
@@ -103,47 +101,53 @@ class DigitalTwin:
                     self.graph.remove_edge(u, v, k)
 
     def update_switch_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
+        """
+        Update switch-switch link states using the canonical key stored as edge key.
+        The key is a tuple: ((dpid1, port1), (dpid2, port2))
+        """
         if not portdesc_dict:
             return
+
+        # Build lookup: (dpid, port_no) -> 'up'/'down'
         port_state_lookup = {}
         for dpid, ports in portdesc_dict.items():
             for p in ports:
                 port_no = p.get("port_no")
-                # we don't care about localhost/loopback when thinking about inter-switch links
                 if port_no == "LOCAL":
                     continue
-                # isinstance checks wether port_no is of class str
-                # isdigit() checks if all characters in a string are digits
                 if isinstance(port_no, str) and port_no.isdigit():
-                    # normalize the port number to be consistent with how I store them elsewhere
                     port_no = int(port_no)
                 config = p.get("config", 0)
                 state = p.get("state", 0)
-                # I use & 1 to focus only on the first (less significant bit of the value.)
-                # it could be either 0 or 1. Indipendentely if the integer number that is raffiguring (every integer above or equal to 1 means that the port is down)
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_lookup[(dpid, port_no)] = "down" if is_down else "up"
 
-        # In the following loop if keys and data are not set to true, the get function wuold have returned tuples of (u, v).
-        # With these parameters set, the tuple will be (u, v, key, attrs)
+        # Iterate over switch-switch edges
         for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
             if attrs.get("type") != "switch_switch":
                 continue
-            src_port = attrs.get("src_port")
-            dst_port = attrs.get("dst_port")
-            if src_port is None or dst_port is None:
+
+            # Key should be a tuple of two (dpid, port) pairs
+            if not isinstance(key, tuple) or len(key) != 2:
+                print(f"[WARN] Invalid edge key for {u}-{v}: {key}")
                 continue
-            # I set the port state to unknown as a default if the searched key doesn't pop up
-            src_state = port_state_lookup.get((u, src_port), "unknown")
-            dst_state = port_state_lookup.get((v, dst_port), "unknown")
-            # Note: Even if it gets labeled as "unknown", here i put it as DOWN
-            new_state = 1 if (src_state == "up" and dst_state == "up") else 0
+
+            # Extract ports from the canonical key
+            (dpid1, port1) = key[0]
+            (dpid2, port2) = key[1]
+
+            # Look up both ends
+            state1 = port_state_lookup.get((dpid1, port1), "unknown")
+            state2 = port_state_lookup.get((dpid2, port2), "unknown")
+
+            new_state = 1 if (state1 == "up" and state2 == "up") else 0
             old_state = attrs.get("state", -1)
+
             if new_state != old_state:
                 self.graph[u][v][key]["state"] = new_state
                 status = "UP" if new_state == 1 else "DOWN"
                 print(
-                    f"[STATE] Switch link {u}:{src_port} <-> {v}:{dst_port} is now {status}"
+                    f"[STATE] Switch link {dpid1}:{port1} <-> {dpid2}:{port2} is now {status}"
                 )
 
     def update_hosts(self, hosts_data: Optional[List[Dict]]):

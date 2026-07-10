@@ -63,7 +63,15 @@ class DTCli(cmd.Cmd):
         for u, v, key, attrs in self.dt.graph.edges(keys=True, data=True):
             if attrs.get("type") == "switch_switch":
                 state = "UP" if attrs.get("state") == 1 else "DOWN"
-                print(f"{u}:{attrs['src_port']} <-> {v}:{attrs['dst_port']} [{state}]")
+                # Extract ports from key
+                if isinstance(key, tuple) and len(key) == 2:
+                    (dpid1, port1) = key[0]
+                    (dpid2, port2) = key[1]
+                    print(f"{dpid1}:{port1} <-> {dpid2}:{port2} [{state}]")
+                else:
+                    print(
+                        f"{u}:{attrs.get('src_port')} <-> {v}:{attrs.get('dst_port')} [{state}]"
+                    )
 
     def do_flows(self, arg):
         """Show real and hypothetical flows on a specific switch. Usage: flows <dpid>"""
