@@ -89,6 +89,7 @@ On the mininet CLI
 ```py h1.setIP('10.0.0.100/8', intf='h1-eth1')```   
 ```py h1.setMAC('00:00:00:00:00:10', intf='h1-eth1')```  
 ```link s1 h1 down```  
+```py s2.attach('s2-eth4')```
 *Now is normal for pingall not to work! Because the 'h1' hostname is associated with the eth0 interface*  
 To test in mininet:
 ```h2 ping 10.0.0.100```  
