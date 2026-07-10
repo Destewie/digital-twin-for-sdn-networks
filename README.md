@@ -29,11 +29,11 @@ On one terminal:
 
 ### Start the mininet simulation
 On another terminal:  
-```sudo mn --topo single,2 --mac --switch ovsk --controller remote```  
-
-*Alternative topology:*   
 ```sudo mn --topo linear,2 --mac --switch ovsk --controller remote```  
 
+*Alternative topologies:*   
+```sudo mn --topo single,2 --mac --switch ovsk --controller remote```  
+```sudo mn --topo tree,depth=2,fanout=2 --mac --switch ovsk --controller remote```
 
 ### Finally start the digital twin script
 On the last terminal:  
@@ -81,6 +81,22 @@ On the mininet CLI
   
 ### Remove a switch
 ```py net.delSwitch(s1)```  
+
+### Other simulations
+- Attach an existing host to another switch and then destroy the link with the first switch and see that everythin still works
+```sudo mn --topo linear,3 --mac --switch ovsk --controller remote```   
+```py net.addLink(h1, s2)```  
+```py h1.setIP('10.0.0.100/8', intf='h1-eth1')```   
+```py h1.setMAC('00:00:00:00:00:10', intf='h1-eth1')```  
+```link s1 h1 down```  
+*Now is normal for pingall not to work! Because the 'h1' hostname is associated with the eth0 interface*  
+To test in mininet:
+```h2 ping 10.0.0.100```  
+```h3 ping 10.0.0.100```  
+To test if everything is mirrored on the digital twin:
+```summary```
+```hosts```
+
 
 ### Useful side-notes
 - Launching ```py net.start()``` in mininet at runtime breaks some network configuations; expecially in switches and hosts that you created at runtime

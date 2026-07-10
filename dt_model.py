@@ -212,7 +212,7 @@ class DigitalTwin:
             else:
                 # Update state just in case
                 # If it is not really up, don't worry! The state is going to be updated in the same sync cycle by update_host_link_states()
-                self.graph[mac][switch_dpid][edge_key]["state"] = "up"
+                self.graph[mac][switch_dpid][edge_key]["state"] = switch_port
         # Remove hosts no longer present
         # list() fixes the list of nodes at the beginning of the cycle, while graph.nodes is dynamic
         # I use the list() method to avoid runtime changes in self.graph.nodes.
