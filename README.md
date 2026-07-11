@@ -147,8 +147,8 @@ Examples:
 ```(dt) hosts```  
 
 ### What-if demo
-```sudo mn --topo tree,depth=2,fanout=2 --mac --switch ovsk --controller remote```  
-```h1 ping h4 -c 1000 &```  
-- On the digital twin CLI:
-```(dt) flows 0000000000000001```    
-```(dt) whatif 0000000000000001 {"in_port":1} ["DROP"] 10```
+```sudo mn --custom digital-twin-for-sdn-networks/custom_topologies/two_nets.py --topo twonets```  
+```h3 ping h4 -c 1000 &```  
+- On the digital twin CLI:  
+```(dt) flows 0000000000000002```    
+```(dt) whatif 0000000000000002 {"in_port":1} ["DROP"] 10```

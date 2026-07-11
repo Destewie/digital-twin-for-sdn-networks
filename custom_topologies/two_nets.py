@@ -14,9 +14,11 @@ class TwoNetsTopo(Topo):
         self.addLink(h2, s1)
 
         # Hosts on Network 2 (subnet 10.0.2.0/24)
-        h3 = self.addHost('h3', ip='10.0.2.1/24', mac='00:00:00:00:02:03')
-        h4 = self.addHost('h4', ip='10.0.2.2/24', mac='00:00:00:00:02:04')
+        h3 = self.addHost('h3', ip='10.0.2.3/24', mac='00:00:00:00:02:03')
+        h4 = self.addHost('h4', ip='10.0.2.4/24', mac='00:00:00:00:02:04')
+        h5 = self.addHost('h5', ip='10.0.2.5/24', mac='00:00:00:00:02:05')
         self.addLink(h3, s2)
         self.addLink(h4, s2)
+        self.addLink(h5, s2)
 
 topos = { 'twonets': (lambda: TwoNetsTopo()) }
