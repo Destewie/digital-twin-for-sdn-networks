@@ -53,9 +53,8 @@ class DTCli(cmd.Cmd):
             if attrs.get("type") == "switch":
                 ports = len(attrs.get("ports", []))
                 flows = len(attrs.get("flows", []))
-                hypo = len(attrs.get("hypothetical_flows", []))
                 print(
-                    f"Switch {node}: {ports} ports, {flows} real flows, {hypo} hypothetical flows"
+                    f"Switch {node}: {ports} ports, {flows} real flows"
                 )
 
     def do_links(self, arg):
@@ -84,16 +83,10 @@ class DTCli(cmd.Cmd):
             return
         attrs = self.dt.graph.nodes[dpid]
         real = attrs.get("flows", [])
-        hypo = attrs.get("hypothetical_flows", [])
         print(f"Real flows on {dpid}:")
         for i, f in enumerate(real, 1):
             print(
                 f"  {i}: match={f.get('match')}, actions={f.get('actions')}, packets={f.get('packet_count')}"
-            )
-        print(f"Hypothetical flows on {dpid}:")
-        for i, f in enumerate(hypo, 1):
-            print(
-                f"  {i}: match={f.get('match')}, actions={f.get('actions')}, priority={f.get('priority')}"
             )
 
     # ----------------------------------------
