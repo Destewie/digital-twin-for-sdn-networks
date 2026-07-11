@@ -102,31 +102,30 @@ class DTCli(cmd.Cmd):
     def do_whatif(self, arg):
         """
         Run a what‑if simulation: add a hypothetical flow to a switch and see its impact.
-        Usage: whatif <dpid> <match_json> <actions_json> <priority>
-        Example: whatif 0000000000000001 '{"in_port":1}' '["DROP"]' 10
+        Usage: whatif <dpid> <match_json> <actions_json>
+        Example: whatif 0000000000000001 '{"in_port":1}' '["DROP"]'
         """
-        parts = arg.split(maxsplit=3)
-        if len(parts) < 4:
-            print("Usage: whatif <dpid> <match_json> <actions_json> <priority>")
+        parts = arg.split(maxsplit=2)  # only 3 parts: dpid, match, actions
+        if len(parts) < 3:
+            print("Usage: whatif <dpid> <match_json> <actions_json>")
             return
-        dpid, match_str, actions_str, priority_str = parts
+        dpid, match_str, actions_str = parts
         match_str = match_str.strip().strip("'\"").strip()
         actions_str = actions_str.strip().strip("'\"").strip()
         try:
             match = json.loads(match_str)
             actions = json.loads(actions_str)
-            priority = int(priority_str)
         except Exception as e:
             print(f"Error parsing arguments: {e}")
             return
 
         clone = self.dt.clone()
         try:
-            clone.add_hypothetical_flow(dpid, match, actions, priority)
+            clone.add_hypothetical_flow(dpid, match, actions)
             impact = clone.simulate_impact()
             print("=== Impact of hypothetical flow ===")
             action_str = ", ".join(impact.get("hypothetical_actions", ["?"]))
-            print(f"Hypothetical rule: match={match}, action={action_str}, priority={priority}")
+            print(f"Hypothetical rule: match={match}, action={action_str}")
             total_pkts = impact.get("total_packets", 0)
             total_bytes = impact.get("total_bytes", 0)
             print(f"Total traffic affected: {total_pkts} packets, {total_bytes} bytes")

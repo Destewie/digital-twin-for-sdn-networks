@@ -409,9 +409,7 @@ class DigitalTwin:
         new_twin._prev_state = None
         return new_twin
 
-    def add_hypothetical_flow(
-        self, dpid: str, match: dict, actions: list, priority: int = 1
-    ):
+    def add_hypothetical_flow(self, dpid: str, match: dict, actions: list):
         """
         Add a hypothetical flow rule to a switch in the twin.
         This does NOT affect the real network.
@@ -424,7 +422,6 @@ class DigitalTwin:
             {
                 "match": match,
                 "actions": actions,
-                "priority": priority,
                 "hypothetical": True,
             }
         )
