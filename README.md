@@ -73,13 +73,9 @@ Available digital twin CLI commands:
 ## Whatif command
 Detects which flows will be affected by a potential new rule. \ 
 Examples:
-- ```whatif 0000000000000001 '{"in_port":1}' '["DROP"]' 10```
-- ```whatif 0000000000000001 '{"dl_src":"00:00:00:00:00:01","dl_dst":"00:00:00:00:00:02"}' '["OUTPUT:3"]' 5```
-- ```whatif 0000000000000001 '{"in_port":1,"dl_src":"00:00:00:00:00:01"}' '["OUTPUT:3"]' 10```
-
-
-# Known bugs
-- Imagine the linear,2 topology. If I spawn a new node h3 and I attach it both to s1 and s2, when I delete the switch s1, the network configuration of h3 disappears, it is not configurable anymore and it also loses connectivity with the s2 (even if it should have been attached to it)
+- ```whatif 0000000000000001 '{"in_port":1}' '["DROP"]'```
+- ```whatif 0000000000000001 '{"dl_src":"00:00:00:00:00:01","dl_dst":"00:00:00:00:00:02"}' '["OUTPUT:3"]'```
+- ```whatif 0000000000000001 '{"in_port":1,"dl_src":"00:00:00:00:00:01"}' '["OUTPUT:3"]'```
 
 ---
 
@@ -146,10 +142,19 @@ Examples:
 ```(dt) summary```  
 ```(dt) hosts```  
 
-### What-if demo
+### What-if demo DROP
 ```sudo mn --custom digital-twin-for-sdn-networks/custom_topologies/two_nets.py --topo twonets --switch ovsk --controller remote```  
 ```h3 ping h4 -c 1000 &```  
 - On the digital twin CLI:  
 ```(dt) flows 0000000000000002```    
-```(dt) whatif 0000000000000002 {"in_port":1} ["DROP"] 10```
-```(dt) whatif 0000000000000001 {"in_port":1} ["DROP"] 10```
+```(dt) whatif 0000000000000002 {"in_port":1} ["DROP"]```
+```(dt) flows 0000000000000001```    
+```(dt) whatif 0000000000000001 {"in_port":1} ["DROP"]```
+
+### What-if demo OUTPUT
+```sudo mn --topo tree,depth=2,fanout=2 --mac --switch ovsk --controller remote```
+```h1 ping h4 -c 1000 &```  
+On the digital twin CLI:  
+- ```whatif 0000000000000001 '{"in_port":1}' '["OUTPUT:2"]``` -> NO CHANGES: Every flow packet going in port 1 was already going to be forwarded to port 2.  
+- ```whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:2"]``` -> Every flow will be forwarded to the host h2. Some flows will be affected, others were already doing exactly that.
+- ```whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:3"]``` -> Every flow will be forwarded to the switch 1. Some flows will be affected, others were already doing exactly that.
