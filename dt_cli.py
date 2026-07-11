@@ -133,18 +133,7 @@ class DTCli(cmd.Cmd):
             print(f"Affected real flows: {len(impact['affected_flows'])}")
             for af in impact['affected_flows']:
                 rf = af['real_flow']
-                if "DROP" in action_str:
-                    effect = "would be dropped"
-                elif "OUTPUT" in action_str:
-                    import re
-                    port_match = re.search(r"OUTPUT[: ]+(\d+)", action_str)
-                    if port_match:
-                        port = port_match.group(1)
-                        effect = f"would be redirected to port {port}"
-                    else:
-                        effect = "would be redirected"
-                else:
-                    effect = "would be affected"
+                effect = af.get('effect', 'would be affected')
                 print(f"  Switch {af['switch']}: match={rf.get('match')} "
                       f"(packets={rf.get('packet_count')}, bytes={rf.get('byte_count')}) -> {effect}")
             hosts = impact['affected_hosts']

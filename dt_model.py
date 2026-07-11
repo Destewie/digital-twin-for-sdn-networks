@@ -432,7 +432,8 @@ class DigitalTwin:
     def simulate_impact(self) -> dict:
         """
         Analyze the impact of new hypothetical flows.
-        Returns affected flows, total traffic volume, and the set of source MACs involved.
+        For each affected flow, we resolve the action (DROP or OUTPUT)
+        and provide a meaningful description based on topology.
         """
         impact = {
             "affected_flows": [],
@@ -450,6 +451,44 @@ class DigitalTwin:
                     return False
             return True
 
+        # Helper to resolve an output action
+        def resolve_output(sw_dpid, port_no):
+            """
+            Return a string describing what is connected to (sw_dpid, port_no).
+            Also returns 'up'/'down' if the edge state is known.
+            """
+            # Check host-switch edges
+            for u, v, key, attrs in self.graph.edges(keys=True, data=True):
+                if attrs.get("type") == "host_switch":
+                    if self.graph.nodes[u].get("type") == "switch":
+                        sw, host = u, v
+                        sw_port = attrs.get("switch_port")
+                    else:
+                        host, sw = u, v
+                        sw_port = attrs.get("switch_port")
+                    if sw == sw_dpid and sw_port == port_no:
+                        state = attrs.get("state", "unknown")
+                        host_mac = host if self.graph.nodes[host].get("type") == "host" else None
+                        if host_mac:
+                            ip = self.graph.nodes[host].get("ipv4", [""])[0]
+                            return f"host {host_mac} (IP {ip})", state
+            # Check switch-switch edges
+            for u, v, key, attrs in self.graph.edges(keys=True, data=True):
+                if attrs.get("type") == "switch_switch":
+                    if u == sw_dpid:
+                        other_sw = v
+                        other_port = attrs.get("dst_port")
+                    elif v == sw_dpid:
+                        other_sw = u
+                        other_port = attrs.get("src_port")
+                    else:
+                        continue
+                    # Check if this edge uses this port
+                    if attrs.get("src_port") == port_no or attrs.get("dst_port") == port_no:
+                        state = "up" if attrs.get("state") == 1 else "down"
+                        return f"switch {other_sw} on port {other_port}", state
+            return "nothing (port not connected)", "unknown"
+
         for sw, attrs in self.graph.nodes(data=True):
             if attrs.get("type") != "switch":
                 continue
@@ -464,13 +503,33 @@ class DigitalTwin:
                         byte = rf.get("byte_count", 0)
                         impact["total_packets"] += pkt
                         impact["total_bytes"] += byte
-                        # Find source host
                         src = None
                         match = rf.get("match", {})
                         if "dl_src" in match:
                             src = match["dl_src"]
                         elif "nw_src" in match:
                             src = match["nw_src"]
+                        # Build effect description
+                        effect_desc = ""
+                        if "DROP" in action_str:
+                            effect_desc = "would be dropped"
+                        elif "OUTPUT" in action_str:
+                            import re
+                            port_match = re.search(r"OUTPUT[: ]+(\d+)", action_str)
+                            if port_match:
+                                out_port = int(port_match.group(1))
+                                target_desc, state = resolve_output(sw, out_port)
+                                if state == "down":
+                                    effect_desc = f"would be dropped because port {out_port} is down"
+                                elif state == "up":
+                                    effect_desc = f"would be forwarded to {target_desc}"
+                                else:
+                                    effect_desc = f"would be forwarded to port {out_port} ({target_desc})"
+                            else:
+                                effect_desc = "would be redirected (unknown port)"
+                        else:
+                            effect_desc = "would be affected"
+
                         impact["affected_flows"].append({
                             "switch": sw,
                             "real_flow": rf,
@@ -478,12 +537,12 @@ class DigitalTwin:
                             "packets": pkt,
                             "bytes": byte,
                             "src_host": src,
+                            "effect": effect_desc,
                         })
                         if src:
                             impact["affected_hosts"].add(src)
 
         return impact
-
 # ----------------------------------------------------------------------
 # Quick test (to be run after rest_client works)
 # ----------------------------------------------------------------------
