@@ -147,7 +147,7 @@ Examples:
 ```(dt) hosts```  
 
 ### What-if demo
-```sudo mn --custom digital-twin-for-sdn-networks/custom_topologies/two_nets.py --topo twonets```  
+```sudo mn --custom digital-twin-for-sdn-networks/custom_topologies/two_nets.py --topo twonets --switch ovsk --controller remote```  
 ```h3 ping h4 -c 1000 &```  
 - On the digital twin CLI:  
 ```(dt) flows 0000000000000002```    
