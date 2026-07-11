@@ -50,56 +50,7 @@ On the last terminal:
 
 ---
 
-## How to modify the mininet network through its CLI
-### Disable/enable a link
-On the mininet CLI  
-```link h2 s1 down```  
-```pingall```  
-```link h2 s1 up```  
-
-
-### Add a host
-*Note that if you don't add this host, port names will change if you try to add another switch in the following set of commands*  
-```py net.addHost('h3')```  
-```py net.addLink(h3, s1)```  
-```py h3.setIP('10.0.0.3/8')```  
-```py h3.setMAC('00:00:00:00:00:03')```  
-```py s1.attach('s1-eth3')```  
-  
-### Add a switch and a host
-```py net.addSwitch('s2')```  
-```py net.addLink(s1, s2)```
-```py net.addHost('h4')```  
-```py net.addLink(h4, s2)```
-```py h4.setIP('10.0.0.4/8')```  
-```py h4.setMAC('00:00:00:00:00:04')```  
-```py s1.attach('s1-eth4')```  
-```py s2.attach('s2-eth1')```  
-```py s2.attach('s2-eth2')```  
-```py s2.start([net.controllers[0]])```
-
-  
-### Remove a switch
-```py net.delSwitch(s1)```  
-
-### Other simulations
-- Attach an existing host to another switch and then destroy the link with the first switch and see that everythin still works
-```sudo mn --topo linear,3 --mac --switch ovsk --controller remote```   
-```py net.addLink(h1, s2)```  
-```py h1.setIP('10.0.0.100/8', intf='h1-eth1')```   
-```py h1.setMAC('00:00:00:00:00:10', intf='h1-eth1')```  
-```link s1 h1 down```  
-```py s2.attach('s2-eth4')```
-*Now is normal for pingall not to work! Because the 'h1' hostname is associated with the eth0 interface*  
-To test in mininet:
-```h2 ping 10.0.0.100```  
-```h3 ping 10.0.0.100```  
-To test if everything is mirrored on the digital twin:
-```summary```
-```hosts```
-
-
-### Useful side-notes
+### Useful mininet side-notes
 - Launching ```py net.start()``` in mininet at runtime breaks some network configuations; expecially in switches and hosts that you created at runtime
 - Remember to ```sudo mn -c``` every time that you exit from a mininet simulation
 
@@ -129,3 +80,75 @@ Examples:
 
 # Known bugs
 - Imagine the linear,2 topology. If I spawn a new node h3 and I attach it both to s1 and s2, when I delete the switch s1, the network configuration of h3 disappears, it is not configurable anymore and it also loses connectivity with the s2 (even if it should have been attached to it)
+
+---
+
+# Demos
+*Before lounching these demos, ensure you successfully started the ryu controller, the mininet simulation and the digital twin*
+*When nothing else is specified, execute these commands on the terminal dedicated to mininet.*  
+*"(dt)" is used to indicate commands to lounch on the digital twin cli*
+
+### Dynamic network modificatioon
+```sudo mn --topo single,3 --mac --switch ovsk --controller remote```   
+- Add a host  
+```py net.addHost('h3')```  
+```py net.addLink(h3, s1)```  
+```py h3.setIP('10.0.0.3/8')```  
+```py h3.setMAC('00:00:00:00:00:03')```  
+```py s1.attach('s1-eth3')```    
+
+- Add a switch and another host  
+```py net.addSwitch('s2')```  
+```py net.addLink(s1, s2)```  
+```py net.addHost('h4')```  
+```py net.addLink(h4, s2)```  
+```py h4.setIP('10.0.0.4/8')```  
+```py h4.setMAC('00:00:00:00:00:04')```  
+```py s1.attach('s1-eth4')```  
+```py s2.attach('s2-eth1')```  
+```py s2.attach('s2-eth2')```  
+```py s2.start([net.controllers[0]])```  
+
+- To test if everything is mirrored on the digital twin:  
+```(dt) summary```  
+```(dt) hosts```  
+```(dt) switches```  
+```(dt) links```  
+
+### Link failure detection
+```sudo mn --topo single,3 --mac --switch ovsk --controller remote```   
+- Toggle the state of a link  
+```link h2 s1 down```  
+```link h2 s1 up```  
+
+### Host with 2 links & one of them fails 
+```sudo mn --topo linear,3 --mac --switch ovsk --controller remote```   
+- Attach an existing host to another switch and then destroy the link with the first switch and see that everythin still works
+```py net.addLink(h1, s2)```  
+```py h1.setIP('10.0.0.100/8', intf='h1-eth1')```   
+```py h1.setMAC('00:00:00:00:00:10', intf='h1-eth1')```  
+```py s2.attach('s2-eth4')```  
+```link s1 h1 down```  
+*Now is normal for pingall not to work! Because the 'h1' hostname is associated with the eth0 interface*  
+- To test in mininet:  
+```h2 ping 10.0.0.100```  
+```h3 ping 10.0.0.100```  
+- To test if everything is mirrored on the digital twin:  
+```(dt) summary```  
+```(dt) hosts```  
+
+### Remove a switch
+```sudo mn --topo linear,3 --mac --switch ovsk --controller remote```   
+- Delete a switch  
+```py net.delSwitch(s1)```
+- To test if everything is mirrored on the digital twin:  
+```(dt) links```  
+```(dt) summary```  
+```(dt) hosts```  
+
+### What-if demo
+```sudo mn --topo tree,depth=2,fanout=2 --mac --switch ovsk --controller remote```  
+```h1 ping h4 -c 1000 &```  
+- On the digital twin CLI:
+```(dt) flows 0000000000000001```    
+```(dt) whatif 0000000000000001 {"in_port":1} ["DROP"] 10```
