@@ -432,8 +432,7 @@ class DigitalTwin:
     def simulate_impact(self) -> dict:
         """
         Analyze the impact of new hypothetical flows.
-        For each affected flow, we resolve the action (DROP or OUTPUT)
-        and provide a meaningful description based on topology.
+        Provides a human‑readable effect description for each affected flow.
         """
         impact = {
             "affected_flows": [],
@@ -451,11 +450,11 @@ class DigitalTwin:
                     return False
             return True
 
-        # Helper to resolve an output action
+        # Helper to resolve an output port on a switch using the current topology graph
         def resolve_output(sw_dpid, port_no):
             """
             Return a string describing what is connected to (sw_dpid, port_no).
-            Also returns 'up'/'down' if the edge state is known.
+            Also returns 'up'/'down'/'unknown' for the link state.
             """
             # Check host-switch edges
             for u, v, key, attrs in self.graph.edges(keys=True, data=True):
@@ -472,22 +471,41 @@ class DigitalTwin:
                         if host_mac:
                             ip = self.graph.nodes[host].get("ipv4", [""])[0]
                             return f"host {host_mac} (IP {ip})", state
-            # Check switch-switch edges
+            # Check switch-switch edges – now using the edge key to find ports
             for u, v, key, attrs in self.graph.edges(keys=True, data=True):
-                if attrs.get("type") == "switch_switch":
-                    if u == sw_dpid:
-                        other_sw = v
-                        other_port = attrs.get("dst_port")
-                    elif v == sw_dpid:
-                        other_sw = u
-                        other_port = attrs.get("src_port")
-                    else:
-                        continue
-                    # Check if this edge uses this port
-                    if attrs.get("src_port") == port_no or attrs.get("dst_port") == port_no:
-                        state = "up" if attrs.get("state") == 1 else "down"
-                        return f"switch {other_sw} on port {other_port}", state
+                if attrs.get("type") != "switch_switch":
+                    continue
+                # key should be a tuple of ((dpid1, port1), (dpid2, port2))
+                if not isinstance(key, tuple) or len(key) != 2:
+                    continue
+                (dpid1, port1) = key[0]
+                (dpid2, port2) = key[1]
+                # Check if this edge involves sw_dpid and the given port
+                if dpid1 == sw_dpid and port1 == port_no:
+                    other_sw = dpid2
+                    other_port = port2
+                    state = "up" if attrs.get("state") == 1 else "down"
+                    return f"switch {other_sw} on port {other_port}", state
+                if dpid2 == sw_dpid and port2 == port_no:
+                    other_sw = dpid1
+                    other_port = port1
+                    state = "up" if attrs.get("state") == 1 else "down"
+                    return f"switch {other_sw} on port {other_port}", state
             return "nothing (port not connected)", "unknown"
+
+        # Helper to extract the output port from a flow's actions (if any)
+        def get_output_port(actions):
+            if not actions:
+                return None
+            for action in actions:
+                if isinstance(action, str) and action.startswith("OUTPUT:"):
+                    try:
+                        return int(action.split(":")[1])
+                    except (ValueError, IndexError):
+                        return None
+                elif isinstance(action, dict) and action.get("type") == "OUTPUT":
+                    return action.get("port")
+            return None
 
         for sw, attrs in self.graph.nodes(data=True):
             if attrs.get("type") != "switch":
@@ -509,6 +527,7 @@ class DigitalTwin:
                             src = match["dl_src"]
                         elif "nw_src" in match:
                             src = match["nw_src"]
+
                         # Build effect description
                         effect_desc = ""
                         if "DROP" in action_str:
@@ -519,12 +538,18 @@ class DigitalTwin:
                             if port_match:
                                 out_port = int(port_match.group(1))
                                 target_desc, state = resolve_output(sw, out_port)
-                                if state == "down":
-                                    effect_desc = f"would be dropped because port {out_port} is down"
-                                elif state == "up":
-                                    effect_desc = f"would be forwarded to {target_desc}"
+                                # Check current output port of this real flow
+                                current_actions = rf.get("actions", [])
+                                current_out_port = get_output_port(current_actions)
+                                if current_out_port is not None and current_out_port == out_port:
+                                    effect_desc = f"already forwarded to port {out_port} (no change)"
                                 else:
-                                    effect_desc = f"would be forwarded to port {out_port} ({target_desc})"
+                                    if state == "down":
+                                        effect_desc = f"would be dropped because port {out_port} is down"
+                                    elif state == "up":
+                                        effect_desc = f"would be forwarded to {target_desc}"
+                                    else:
+                                        effect_desc = f"would be forwarded to port {out_port} ({target_desc})"
                             else:
                                 effect_desc = "would be redirected (unknown port)"
                         else:
