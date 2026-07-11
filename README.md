@@ -152,3 +152,4 @@ Examples:
 - On the digital twin CLI:  
 ```(dt) flows 0000000000000002```    
 ```(dt) whatif 0000000000000002 {"in_port":1} ["DROP"] 10```
+```(dt) whatif 0000000000000001 {"in_port":1} ["DROP"] 10```

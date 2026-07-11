@@ -103,14 +103,13 @@ class DTCli(cmd.Cmd):
         """
         Run a what‑if simulation: add a hypothetical flow to a switch and see its impact.
         Usage: whatif <dpid> <match_json> <actions_json> <priority>
-        Example: whatif 0000000000000001 '{"in_port":1}' '["OUTPUT:2"]' 10
+        Example: whatif 0000000000000001 '{"in_port":1}' '["DROP"]' 10
         """
         parts = arg.split(maxsplit=3)
         if len(parts) < 4:
             print("Usage: whatif <dpid> <match_json> <actions_json> <priority>")
             return
         dpid, match_str, actions_str, priority_str = parts
-        # Rimuovi eventuali virgolette esterne (singole o doppie) e spazi
         match_str = match_str.strip().strip("'\"").strip()
         actions_str = actions_str.strip().strip("'\"").strip()
         try:
@@ -121,22 +120,53 @@ class DTCli(cmd.Cmd):
             print(f"Error parsing arguments: {e}")
             return
 
-        # Clone the twin to avoid polluting the live state
         clone = self.dt.clone()
         try:
             clone.add_hypothetical_flow(dpid, match, actions, priority)
             impact = clone.simulate_impact()
             print("=== Impact of hypothetical flow ===")
+            action_str = ", ".join(impact.get("hypothetical_actions", ["?"]))
+            print(f"Hypothetical rule: match={match}, action={action_str}, priority={priority}")
+            total_pkts = impact.get("total_packets", 0)
+            total_bytes = impact.get("total_bytes", 0)
+            print(f"Total traffic affected: {total_pkts} packets, {total_bytes} bytes")
             print(f"Affected real flows: {len(impact['affected_flows'])}")
-            for af in impact["affected_flows"]:
-                rf = af["real_flow"]
-                print(
-                    f"  Switch {af['switch']}: match={rf.get('match')} "
-                    f"(packets={rf.get('packet_count')}, bytes={rf.get('byte_count')})"
-                )
-            print(
-                f"Affected hosts (MACs): {impact['affected_hosts'] if impact['affected_hosts'] else 'none'}"
-            )
+            for af in impact['affected_flows']:
+                rf = af['real_flow']
+                if "DROP" in action_str:
+                    effect = "would be dropped"
+                elif "OUTPUT" in action_str:
+                    import re
+                    port_match = re.search(r"OUTPUT[: ]+(\d+)", action_str)
+                    if port_match:
+                        port = port_match.group(1)
+                        effect = f"would be redirected to port {port}"
+                    else:
+                        effect = "would be redirected"
+                else:
+                    effect = "would be affected"
+                print(f"  Switch {af['switch']}: match={rf.get('match')} "
+                      f"(packets={rf.get('packet_count')}, bytes={rf.get('byte_count')}) -> {effect}")
+            hosts = impact['affected_hosts']
+            print(f"Affected hosts (MACs): {', '.join(hosts) if hosts else 'none'}")
+
+            # Host impact summary
+            if impact.get("host_impact"):
+                print("\n--- Host Impact Analysis ---")
+                for host, info in impact["host_impact"].items():
+                    is_drop = "DROP" in action_str
+                    status = info["status"]
+                    if status == "isolated":
+                        status_str = "ISOLATED (all traffic dropped)"
+                    elif status == "isolated" and not is_drop:
+                        status_str = "🔄 REDIRECTED (all traffic rerouted)"
+                    elif status == "partial":
+                        status_str = "PARTIAL (some flows affected)"
+                    elif status == "ok":
+                        status_str = "OK (no impact)"
+                    else:
+                        status_str = "unknown"
+                    print(f"Host {host}: {info['affected_flows']}/{info['total_flows']} flows affected -> {status_str}")
         except Exception as e:
             print(f"Simulation error: {e}")
 

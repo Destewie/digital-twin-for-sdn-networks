@@ -431,13 +431,16 @@ class DigitalTwin:
 
     def simulate_impact(self) -> dict:
         """
-        Analyze the impact of new hypotetical flows.
-        A real flow is considered "affected" if the hypotetical match is a subset of the real match.
+        Analyze the impact of new hypothetical flows.
+        Returns detailed info about affected flows, total traffic, and host impact.
         """
         impact = {
             "affected_flows": [],
             "affected_hosts": set(),
-            "affected_links": set(),
+            "host_impact": {},  # host -> {'total_flows': int, 'affected_flows': int, 'status': 'ok'/'partial'/'isolated'}
+            "total_packets": 0,
+            "total_bytes": 0,
+            "hypothetical_actions": set(),
         }
 
         def is_subset(hypo_match, real_match):
@@ -449,23 +452,101 @@ class DigitalTwin:
                     return False
             return True
 
+        # First, gather all host-switch edges to know which hosts are connected to which switches
+        host_connections = {}  # host_mac -> list of (switch, port)
+        for u, v, key, attrs in self.graph.edges(keys=True, data=True):
+            if attrs.get("type") == "host_switch":
+                if self.graph.nodes[u].get("type") == "host":
+                    host = u
+                    sw = v
+                    sw_port = attrs.get("switch_port")
+                elif self.graph.nodes[v].get("type") == "host":
+                    host = v
+                    sw = u
+                    sw_port = attrs.get("switch_port")
+                else:
+                    continue
+                if host not in host_connections:
+                    host_connections[host] = []
+                host_connections[host].append((sw, sw_port))
+
         for sw, attrs in self.graph.nodes(data=True):
             if attrs.get("type") != "switch":
                 continue
             real_flows = attrs.get("flows", [])
             hypo_flows = attrs.get("hypothetical_flows", [])
             for hf in hypo_flows:
+                action_str = str(hf.get("actions", []))
+                impact["hypothetical_actions"].add(action_str)
                 for rf in real_flows:
                     if is_subset(hf["match"], rf.get("match", {})):
-                        impact["affected_flows"].append(
-                            {"switch": sw, "real_flow": rf, "hypothetical": hf}
-                        )
-                        # Estrae MAC dai match
-                        for field in ["dl_src", "dl_dst", "nw_src", "nw_dst"]:
-                            if field in rf.get("match", {}):
-                                impact["affected_hosts"].add(rf["match"][field])
-        return impact
+                        pkt = rf.get("packet_count", 0)
+                        byte = rf.get("byte_count", 0)
+                        impact["total_packets"] += pkt
+                        impact["total_bytes"] += byte
+                        # Determine source host from match
+                        src = None
+                        if "dl_src" in rf.get("match", {}):
+                            src = rf["match"]["dl_src"]
+                        elif "nw_src" in rf.get("match", {}):
+                            src = rf["match"]["nw_src"]
+                        impact["affected_flows"].append({
+                            "switch": sw,
+                            "real_flow": rf,
+                            "hypothetical": hf,
+                            "packets": pkt,
+                            "bytes": byte,
+                            "src_host": src,
+                        })
+                        if src:
+                            impact["affected_hosts"].add(src)
 
+        # Now analyze host impact per host
+        for host in impact["affected_hosts"]:
+            # Count total flows originating from this host (across all switches)
+            total_flows = 0
+            affected_count = 0
+            for af in impact["affected_flows"]:
+                if af.get("src_host") == host:
+                    total_flows += 1
+                    affected_count += 1
+            # But we also need to count flows from this host that are NOT affected.
+            # Let's compute all flows for this host across all switches.
+            all_flows = []
+            for sw, attrs in self.graph.nodes(data=True):
+                if attrs.get("type") != "switch":
+                    continue
+                for rf in attrs.get("flows", []):
+                    match = rf.get("match", {})
+                    if match.get("dl_src") == host or match.get("nw_src") == host:
+                        all_flows.append(rf)
+            total_flows = len(all_flows)
+            # Count how many of those are affected (we already have affected_count)
+            # However, affected_count might be less if we have multiple affected flows per host.
+            # We need to count unique flows.
+            # Let's recompute per host:
+            affected_flow_ids = set()
+            for af in impact["affected_flows"]:
+                if af.get("src_host") == host:
+                    # Use flow attributes as ID (simplistic)
+                    flow_id = (af["switch"], str(af["real_flow"].get("match", {})))
+                    affected_flow_ids.add(flow_id)
+            affected_count = len(affected_flow_ids)
+            # Determine status
+            if total_flows == 0:
+                status = "unknown"
+            elif affected_count == total_flows:
+                status = "isolated"
+            elif affected_count > 0:
+                status = "partial"
+            else:
+                status = "ok"
+            impact["host_impact"][host] = {
+                "total_flows": total_flows,
+                "affected_flows": affected_count,
+                "status": status,
+            }
+        return impact
 
 # ----------------------------------------------------------------------
 # Quick test (to be run after rest_client works)
