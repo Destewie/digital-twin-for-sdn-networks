@@ -432,7 +432,7 @@ class DigitalTwin:
     def simulate_impact(self) -> dict:
         """
         Analyze the impact of new hypothetical flows.
-        Host isolation is determined by the effect on flows at the host's ingress switch.
+        Host impact is based on all flows of that host across all switches.
         """
         impact = {
             "affected_flows": [],
@@ -451,25 +451,28 @@ class DigitalTwin:
                     return False
             return True
 
-        # Build host connections: host -> list of (switch, port)
-        host_connections = {}
-        for u, v, key, attrs in self.graph.edges(keys=True, data=True):
-            if attrs.get("type") == "host_switch":
-                if self.graph.nodes[u].get("type") == "host":
-                    host = u
-                    sw = v
-                    sw_port = attrs.get("switch_port")
-                elif self.graph.nodes[v].get("type") == "host":
-                    host = v
-                    sw = u
-                    sw_port = attrs.get("switch_port")
-                else:
-                    continue
-                if host not in host_connections:
-                    host_connections[host] = []
-                host_connections[host].append((sw, sw_port))
+        # Step 1: Collect all real flows per host (across all switches)
+        host_all_flows = {}  # host_mac -> set of flow match dicts (as frozenset items for hashing)
+        for sw, attrs in self.graph.nodes(data=True):
+            if attrs.get("type") != "switch":
+                continue
+            for rf in attrs.get("flows", []):
+                match = rf.get("match", {})
+                # Determine source host
+                src = None
+                if "dl_src" in match:
+                    src = match["dl_src"]
+                elif "nw_src" in match:
+                    src = match["nw_src"]
+                if src:
+                    # Use a frozenset of items for hashable set
+                    match_key = frozenset(match.items())
+                    if src not in host_all_flows:
+                        host_all_flows[src] = set()
+                    host_all_flows[src].add(match_key)
 
-        # First pass: find affected flows and collect data
+        # Step 2: Find affected flows and record per host
+        host_affected_flows = {}  # host_mac -> set of affected match keys
         for sw, attrs in self.graph.nodes(data=True):
             if attrs.get("type") != "switch":
                 continue
@@ -485,10 +488,12 @@ class DigitalTwin:
                         impact["total_packets"] += pkt
                         impact["total_bytes"] += byte
                         src = None
-                        if "dl_src" in rf.get("match", {}):
-                            src = rf["match"]["dl_src"]
-                        elif "nw_src" in rf.get("match", {}):
-                            src = rf["match"]["nw_src"]
+                        match = rf.get("match", {})
+                        if "dl_src" in match:
+                            src = match["dl_src"]
+                        elif "nw_src" in match:
+                            src = match["nw_src"]
+                        match_key = frozenset(match.items())
                         impact["affected_flows"].append({
                             "switch": sw,
                             "real_flow": rf,
@@ -499,47 +504,26 @@ class DigitalTwin:
                         })
                         if src:
                             impact["affected_hosts"].add(src)
+                            if src not in host_affected_flows:
+                                host_affected_flows[src] = set()
+                            host_affected_flows[src].add(match_key)
 
-        # Now analyze host impact focusing on ingress switch
+        # Step 3: Compute host impact
         for host in impact["affected_hosts"]:
-            connections = host_connections.get(host, [])
-            if not connections:
-                continue
-            # Assume single connection per MAC; take the first
-            ingress_sw, ingress_port = connections[0]
-
-            # Count all flows from this host on the ingress switch
-            sw_attrs = self.graph.nodes.get(ingress_sw, {})
-            all_flows_ingress = []
-            for rf in sw_attrs.get("flows", []):
-                match = rf.get("match", {})
-                if match.get("dl_src") == host or match.get("nw_src") == host:
-                    all_flows_ingress.append(rf)
-
-            total_flows_ingress = len(all_flows_ingress)
-            # Count how many of those are affected
-            affected_flows_ingress = 0
-            for af in impact["affected_flows"]:
-                if af.get("src_host") == host and af["switch"] == ingress_sw:
-                    affected_flows_ingress += 1
-
-            # Determine status based on action
+            total_flows = len(host_all_flows.get(host, []))
+            affected_flows = len(host_affected_flows.get(host, []))
             is_drop = any("DROP" in a for a in impact["hypothetical_actions"])
-            if total_flows_ingress == 0:
+            if total_flows == 0:
                 status = "unknown"
-            elif affected_flows_ingress == total_flows_ingress:
-                if is_drop:
-                    status = "isolated"
-                else:
-                    status = "rerouted"
-            elif affected_flows_ingress > 0:
+            elif affected_flows == total_flows:
+                status = "isolated" if is_drop else "rerouted"
+            elif affected_flows > 0:
                 status = "partial"
             else:
                 status = "ok"
-
             impact["host_impact"][host] = {
-                "total_flows": total_flows_ingress,
-                "affected_flows": affected_flows_ingress,
+                "total_flows": total_flows,
+                "affected_flows": affected_flows,
                 "status": status,
             }
 
