@@ -432,28 +432,27 @@ class DigitalTwin:
     def simulate_impact(self) -> dict:
         """
         Analyze the impact of new hypothetical flows.
-        Returns detailed info about affected flows, total traffic, and host impact.
+        Host isolation is determined by the effect on flows at the host's ingress switch.
         """
         impact = {
             "affected_flows": [],
             "affected_hosts": set(),
-            "host_impact": {},  # host -> {'total_flows': int, 'affected_flows': int, 'status': 'ok'/'partial'/'isolated'}
+            "host_impact": {},
             "total_packets": 0,
             "total_bytes": 0,
             "hypothetical_actions": set(),
         }
 
         def is_subset(hypo_match, real_match):
-            """Verifica se tutte le chiavi di hypo_match sono in real_match con lo stesso valore."""
             if not hypo_match:
-                return True  # match vuoto cattura tutto
+                return True
             for key, value in hypo_match.items():
                 if key not in real_match or real_match[key] != value:
                     return False
             return True
 
-        # First, gather all host-switch edges to know which hosts are connected to which switches
-        host_connections = {}  # host_mac -> list of (switch, port)
+        # Build host connections: host -> list of (switch, port)
+        host_connections = {}
         for u, v, key, attrs in self.graph.edges(keys=True, data=True):
             if attrs.get("type") == "host_switch":
                 if self.graph.nodes[u].get("type") == "host":
@@ -470,6 +469,7 @@ class DigitalTwin:
                     host_connections[host] = []
                 host_connections[host].append((sw, sw_port))
 
+        # First pass: find affected flows and collect data
         for sw, attrs in self.graph.nodes(data=True):
             if attrs.get("type") != "switch":
                 continue
@@ -484,7 +484,6 @@ class DigitalTwin:
                         byte = rf.get("byte_count", 0)
                         impact["total_packets"] += pkt
                         impact["total_bytes"] += byte
-                        # Determine source host from match
                         src = None
                         if "dl_src" in rf.get("match", {}):
                             src = rf["match"]["dl_src"]
@@ -501,51 +500,49 @@ class DigitalTwin:
                         if src:
                             impact["affected_hosts"].add(src)
 
-        # Now analyze host impact per host
+        # Now analyze host impact focusing on ingress switch
         for host in impact["affected_hosts"]:
-            # Count total flows originating from this host (across all switches)
-            total_flows = 0
-            affected_count = 0
+            connections = host_connections.get(host, [])
+            if not connections:
+                continue
+            # Assume single connection per MAC; take the first
+            ingress_sw, ingress_port = connections[0]
+
+            # Count all flows from this host on the ingress switch
+            sw_attrs = self.graph.nodes.get(ingress_sw, {})
+            all_flows_ingress = []
+            for rf in sw_attrs.get("flows", []):
+                match = rf.get("match", {})
+                if match.get("dl_src") == host or match.get("nw_src") == host:
+                    all_flows_ingress.append(rf)
+
+            total_flows_ingress = len(all_flows_ingress)
+            # Count how many of those are affected
+            affected_flows_ingress = 0
             for af in impact["affected_flows"]:
-                if af.get("src_host") == host:
-                    total_flows += 1
-                    affected_count += 1
-            # But we also need to count flows from this host that are NOT affected.
-            # Let's compute all flows for this host across all switches.
-            all_flows = []
-            for sw, attrs in self.graph.nodes(data=True):
-                if attrs.get("type") != "switch":
-                    continue
-                for rf in attrs.get("flows", []):
-                    match = rf.get("match", {})
-                    if match.get("dl_src") == host or match.get("nw_src") == host:
-                        all_flows.append(rf)
-            total_flows = len(all_flows)
-            # Count how many of those are affected (we already have affected_count)
-            # However, affected_count might be less if we have multiple affected flows per host.
-            # We need to count unique flows.
-            # Let's recompute per host:
-            affected_flow_ids = set()
-            for af in impact["affected_flows"]:
-                if af.get("src_host") == host:
-                    # Use flow attributes as ID (simplistic)
-                    flow_id = (af["switch"], str(af["real_flow"].get("match", {})))
-                    affected_flow_ids.add(flow_id)
-            affected_count = len(affected_flow_ids)
-            # Determine status
-            if total_flows == 0:
+                if af.get("src_host") == host and af["switch"] == ingress_sw:
+                    affected_flows_ingress += 1
+
+            # Determine status based on action
+            is_drop = any("DROP" in a for a in impact["hypothetical_actions"])
+            if total_flows_ingress == 0:
                 status = "unknown"
-            elif affected_count == total_flows:
-                status = "isolated"
-            elif affected_count > 0:
+            elif affected_flows_ingress == total_flows_ingress:
+                if is_drop:
+                    status = "isolated"
+                else:
+                    status = "rerouted"
+            elif affected_flows_ingress > 0:
                 status = "partial"
             else:
                 status = "ok"
+
             impact["host_impact"][host] = {
-                "total_flows": total_flows,
-                "affected_flows": affected_count,
+                "total_flows": total_flows_ingress,
+                "affected_flows": affected_flows_ingress,
                 "status": status,
             }
+
         return impact
 
 # ----------------------------------------------------------------------

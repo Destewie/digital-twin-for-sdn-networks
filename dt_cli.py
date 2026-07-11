@@ -154,19 +154,18 @@ class DTCli(cmd.Cmd):
             if impact.get("host_impact"):
                 print("\n--- Host Impact Analysis ---")
                 for host, info in impact["host_impact"].items():
-                    is_drop = "DROP" in action_str
                     status = info["status"]
                     if status == "isolated":
-                        status_str = "ISOLATED (all traffic dropped)"
-                    elif status == "isolated" and not is_drop:
-                        status_str = "🔄 REDIRECTED (all traffic rerouted)"
+                        status_str = "ISOLATED (all traffic dropped at ingress)"
+                    elif status == "rerouted":
+                        status_str = "REROUTED (all traffic redirected)"
                     elif status == "partial":
                         status_str = "PARTIAL (some flows affected)"
                     elif status == "ok":
                         status_str = "OK (no impact)"
                     else:
                         status_str = "unknown"
-                    print(f"Host {host}: {info['affected_flows']}/{info['total_flows']} flows affected -> {status_str}")
+                    print(f"Host {host}: {info['affected_flows']}/{info['total_flows']} flows affected on ingress -> {status_str}")
         except Exception as e:
             print(f"Simulation error: {e}")
 
