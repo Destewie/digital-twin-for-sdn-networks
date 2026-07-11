@@ -432,12 +432,11 @@ class DigitalTwin:
     def simulate_impact(self) -> dict:
         """
         Analyze the impact of new hypothetical flows.
-        Host impact is based on all flows of that host across all switches.
+        Returns affected flows, total traffic volume, and the set of source MACs involved.
         """
         impact = {
             "affected_flows": [],
             "affected_hosts": set(),
-            "host_impact": {},
             "total_packets": 0,
             "total_bytes": 0,
             "hypothetical_actions": set(),
@@ -451,28 +450,6 @@ class DigitalTwin:
                     return False
             return True
 
-        # Step 1: Collect all real flows per host (across all switches)
-        host_all_flows = {}  # host_mac -> set of flow match dicts (as frozenset items for hashing)
-        for sw, attrs in self.graph.nodes(data=True):
-            if attrs.get("type") != "switch":
-                continue
-            for rf in attrs.get("flows", []):
-                match = rf.get("match", {})
-                # Determine source host
-                src = None
-                if "dl_src" in match:
-                    src = match["dl_src"]
-                elif "nw_src" in match:
-                    src = match["nw_src"]
-                if src:
-                    # Use a frozenset of items for hashable set
-                    match_key = frozenset(match.items())
-                    if src not in host_all_flows:
-                        host_all_flows[src] = set()
-                    host_all_flows[src].add(match_key)
-
-        # Step 2: Find affected flows and record per host
-        host_affected_flows = {}  # host_mac -> set of affected match keys
         for sw, attrs in self.graph.nodes(data=True):
             if attrs.get("type") != "switch":
                 continue
@@ -487,13 +464,13 @@ class DigitalTwin:
                         byte = rf.get("byte_count", 0)
                         impact["total_packets"] += pkt
                         impact["total_bytes"] += byte
+                        # Find source host
                         src = None
                         match = rf.get("match", {})
                         if "dl_src" in match:
                             src = match["dl_src"]
                         elif "nw_src" in match:
                             src = match["nw_src"]
-                        match_key = frozenset(match.items())
                         impact["affected_flows"].append({
                             "switch": sw,
                             "real_flow": rf,
@@ -504,28 +481,6 @@ class DigitalTwin:
                         })
                         if src:
                             impact["affected_hosts"].add(src)
-                            if src not in host_affected_flows:
-                                host_affected_flows[src] = set()
-                            host_affected_flows[src].add(match_key)
-
-        # Step 3: Compute host impact
-        for host in impact["affected_hosts"]:
-            total_flows = len(host_all_flows.get(host, []))
-            affected_flows = len(host_affected_flows.get(host, []))
-            is_drop = any("DROP" in a for a in impact["hypothetical_actions"])
-            if total_flows == 0:
-                status = "unknown"
-            elif affected_flows == total_flows:
-                status = "isolated" if is_drop else "rerouted"
-            elif affected_flows > 0:
-                status = "partial"
-            else:
-                status = "ok"
-            impact["host_impact"][host] = {
-                "total_flows": total_flows,
-                "affected_flows": affected_flows,
-                "status": status,
-            }
 
         return impact
 
