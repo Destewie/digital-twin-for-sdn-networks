@@ -20,7 +20,7 @@ class DigitalTwinSync:
         self._prev_state = None  # store previous twin state for diff
 
     def fetch_and_update(self) -> bool:
-        """Fetch all data and update the twin. Returns True if success."""
+        """Fetch all data and update the twin. Returns True if it succedes."""
         try:
             # 1. Topology
             # 1.1 Through the API

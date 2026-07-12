@@ -34,7 +34,7 @@ class RyuRestClient:
         elif isinstance(data, dict) and "switches" in data:
             return data["switches"]
         else:
-            print(f"[WARN] Formato inaspettato per /switches: {data}")
+            print(f"[WARN] Unexpected format for /switches: {data}")
             return None
 
     def get_links(self) -> Optional[List[Dict]]:
@@ -46,7 +46,7 @@ class RyuRestClient:
         elif isinstance(data, dict) and "links" in data:
             return data["links"]
         else:
-            print(f"[WARN] Formato inaspettato per /links: {data}")
+            print(f"[WARN] Unexpected format for /links: {data}")
             return None
 
     def get_hosts(self) -> Optional[List[Dict]]:
@@ -58,7 +58,7 @@ class RyuRestClient:
         elif isinstance(data, dict) and "hosts" in data:
             return data["hosts"]
         else:
-            print(f"[WARN] Formato inaspettato per /hosts: {data}")
+            print(f"[WARN] Unexpected format for /hosts: {data}")
             return None
 
     # ----------------------------------------------------------------------
@@ -66,7 +66,7 @@ class RyuRestClient:
     # ----------------------------------------------------------------------
     @staticmethod
     def _dpid_to_int(dpid_hex: str) -> int:
-        """Convert a 16‑character hex DPID (e.g. '0000000000000001') to int (e.g. 1)."""
+        """Convert a 16‑character hex DPID (e.g. '0000000000000001') to int (e.g. 1)"""
         return int(dpid_hex, 16)
 
     def get_port_stats(self, dpid_hex: str) -> Optional[List[Dict]]:
@@ -80,7 +80,7 @@ class RyuRestClient:
         if isinstance(data, dict) and str(dpid_int) in data:
             return data[str(dpid_int)]
         else:
-            print(f"[WARN] Formato inaspettato per /stats/port/{dpid_int}: {data}")
+            print(f"[WARN] Unexpected format for /stats/port/{dpid_int}: {data}")
             return None
 
     def get_flow_stats(self, dpid_hex: str) -> Optional[List[Dict]]:
@@ -93,7 +93,7 @@ class RyuRestClient:
         if isinstance(data, dict) and str(dpid_int) in data:
             return data[str(dpid_int)]
         else:
-            print(f"[WARN] Formato inaspettato per /stats/flow/{dpid_int}: {data}")
+            print(f"[WARN] Unexpected format for /stats/flow/{dpid_int}: {data}")
             return None
 
     def get_port_description(self, dpid_hex: str) -> Optional[List[Dict]]:
@@ -106,32 +106,32 @@ class RyuRestClient:
         if isinstance(data, dict) and str(dpid_int) in data:
             return data[str(dpid_int)]
         else:
-            print(f"[WARN] Formato inaspettato per /stats/portdesc/{dpid_int}: {data}")
+            print(f"[WARN] Unexpected format for /stats/portdesc/{dpid_int}: {data}")
             return None
 
 
 if __name__ == "__main__":
     client = RyuRestClient("http://127.0.0.1:8080")
     print("=== Test REST client ===")
-    
+
     switches = client.get_switches()
     print(f"Switches: {switches}")
-    
+
     links = client.get_links()
     print(f"Links: {links}")
-    
+
     hosts = client.get_hosts()
     print(f"Hosts: {hosts}")
-    
+
     if switches and len(switches) > 0:
         dpid_hex = switches[0]["dpid"]
-        print(f"\nTest statistiche per switch {dpid_hex}:")
-        
+        print(f"\nSwitch stats test {dpid_hex}:")
+
         ports = client.get_port_stats(dpid_hex)
         print(f"Port stats: {ports}")
-        
+
         flows = client.get_flow_stats(dpid_hex)
         print(f"Flow stats: {flows}")
-        
+
         portdesc = client.get_port_description(dpid_hex)
         print(f"Port description: {portdesc}")
