@@ -23,6 +23,7 @@ class DigitalTwinSync:
         """Fetch all data and update the twin. Returns True if success."""
         try:
             # 1. Topology
+            # 1.1 Through the API
             switches = self.client.get_switches()
             links = self.client.get_links()
             hosts = self.client.get_hosts()
@@ -30,6 +31,7 @@ class DigitalTwinSync:
                 print("[WARN] Could not fetch switches, skipping cycle")
                 return False
 
+            # 1.2 operate in the digital twin
             self.dt.update_switches(switches)
             self.dt.update_links(links)
             self.dt.update_hosts(hosts)

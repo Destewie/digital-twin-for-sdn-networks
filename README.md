@@ -80,9 +80,9 @@ Examples:
 ---
 
 # Demos
-*Before lounching these demos, ensure you successfully started the ryu controller, the mininet simulation and the digital twin*  
+*Before lounching these demos, ensure you successfully started the ryu controller, the mininet simulation and the digital twin.*  
 *When nothing else is specified, execute these commands on the terminal dedicated to mininet.*  
-*"(dt)" is used to indicate commands to lounch on the digital twin cli*  
+*"(dt)" is used to indicate commands to lounch on the digital twin cli.*  
 
 ### Dynamic network modificatioon
 ```sudo mn --topo single,3 --mac --switch ovsk --controller remote```   
@@ -119,7 +119,7 @@ Examples:
 
 ### Host with 2 links & one of them fails 
 ```sudo mn --topo linear,3 --mac --switch ovsk --controller remote```   
-- Attach an existing host to another switch and then destroy the link with the first switch and see that everythin still works
+- Attach an existing host to another switch and then destroy the link with the first switch and see that everythin still works  
 ```py net.addLink(h1, s2)```  
 ```py h1.setIP('10.0.0.100/8', intf='h1-eth1')```   
 ```py h1.setMAC('00:00:00:00:00:10', intf='h1-eth1')```  
@@ -136,7 +136,7 @@ Examples:
 ### Remove a switch
 ```sudo mn --topo linear,3 --mac --switch ovsk --controller remote```   
 - Delete a switch  
-```py net.delSwitch(s1)```
+```py net.delSwitch(s1)```  
 - To test if everything is mirrored on the digital twin:  
 ```(dt) links```  
 ```(dt) summary```  
@@ -144,19 +144,24 @@ Examples:
 
 ### What-if demo DROP
 ```sudo mn --custom digital-twin-for-sdn-networks/custom_topologies/two_nets.py --topo twonets --switch ovsk --controller remote```  
+
 ```h3 ping h4 -c 1000 &```  
-- On the digital twin CLI:  
+
+- On the digital twin CLI:   
 ```(dt) flows 0000000000000002```    
-```(dt) whatif 0000000000000002 {"in_port":1} ["DROP"]```
+```(dt) whatif 0000000000000002 {"in_port":1} ["DROP"]```   
 ```(dt) flows 0000000000000001```    
-```(dt) whatif 0000000000000001 {"in_port":1} ["DROP"]```
+```(dt) whatif 0000000000000001 {"in_port":1} ["DROP"]```  
 
 ### What-if demo OUTPUT
-```sudo mn --topo tree,depth=2,fanout=2 --mac --switch ovsk --controller remote```
+```sudo mn --topo tree,depth=2,fanout=2 --mac --switch ovsk --controller remote```  
+
 ```h1 ping h3 -c 1000 &```  
+
 ```link s3 h4 down```  
+
 On the digital twin CLI:  
 - ```(dt) whatif 0000000000000001 '{"in_port":1}' '["OUTPUT:2"]``` -> NO CHANGES: Every flow packet going in port 1 was already going to be forwarded to port 2.  
-- ```(dt) whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:2"]``` -> Every flow will be forwarded to the host h2. Some flows will be affected, others were already doing exactly that.
-- ```(dt) whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:3"]``` -> Every flow will be forwarded to the switch 1. Some flows will be affected, others were already doing exactly that.
+- ```(dt) whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:2"]``` -> Every flow will be forwarded to the host h2. Some flows will be affected, others were already doing exactly that.  
+- ```(dt) whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:3"]``` -> Every flow will be forwarded to the switch 1. Some flows will be affected, others were already doing exactly that.  
 - ```(dt) whatif 0000000000000003 '{"in_port":1}' '["OUTPUT:2"]``` -> A message will pop up notifying that the destination port is down
