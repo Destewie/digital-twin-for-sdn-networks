@@ -153,8 +153,10 @@ Examples:
 
 ### What-if demo OUTPUT
 ```sudo mn --topo tree,depth=2,fanout=2 --mac --switch ovsk --controller remote```
-```h1 ping h4 -c 1000 &```  
+```h1 ping h3 -c 1000 &```  
+```link s3 h4 down```  
 On the digital twin CLI:  
-- ```whatif 0000000000000001 '{"in_port":1}' '["OUTPUT:2"]``` -> NO CHANGES: Every flow packet going in port 1 was already going to be forwarded to port 2.  
-- ```whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:2"]``` -> Every flow will be forwarded to the host h2. Some flows will be affected, others were already doing exactly that.
-- ```whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:3"]``` -> Every flow will be forwarded to the switch 1. Some flows will be affected, others were already doing exactly that.
+- ```(dt) whatif 0000000000000001 '{"in_port":1}' '["OUTPUT:2"]``` -> NO CHANGES: Every flow packet going in port 1 was already going to be forwarded to port 2.  
+- ```(dt) whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:2"]``` -> Every flow will be forwarded to the host h2. Some flows will be affected, others were already doing exactly that.
+- ```(dt) whatif 0000000000000002 '{"in_port":1}' '["OUTPUT:3"]``` -> Every flow will be forwarded to the switch 1. Some flows will be affected, others were already doing exactly that.
+- ```(dt) whatif 0000000000000003 '{"in_port":1}' '["OUTPUT:2"]``` -> A message will pop up notifying that the destination port is down
