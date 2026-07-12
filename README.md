@@ -80,9 +80,9 @@ Examples:
 ---
 
 # Demos
-*Before lounching these demos, ensure you successfully started the ryu controller, the mininet simulation and the digital twin*
+*Before lounching these demos, ensure you successfully started the ryu controller, the mininet simulation and the digital twin*  
 *When nothing else is specified, execute these commands on the terminal dedicated to mininet.*  
-*"(dt)" is used to indicate commands to lounch on the digital twin cli*
+*"(dt)" is used to indicate commands to lounch on the digital twin cli*  
 
 ### Dynamic network modificatioon
 ```sudo mn --topo single,3 --mac --switch ovsk --controller remote```   
