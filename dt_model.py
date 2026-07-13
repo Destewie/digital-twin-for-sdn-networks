@@ -153,9 +153,10 @@ class DigitalTwin:
 
     def update_hosts(self, hosts_data: Optional[List[Dict]]):
         """
+        Are called hosts, but in reality they are interfaces.
         The hosts_data can be retrieved through the API: /v1.0/topology/hosts
         Each element: {"mac": "...", "ipv4": [...], "port": {"dpid": "...", "port_no": "...", ...}, ...}
-        This function also creates links (or edges) between hosts and switches
+        This function also creates edges between hosts and switches
         """
         if hosts_data is None:
             return
@@ -188,6 +189,7 @@ class DigitalTwin:
                 self.graph.nodes[mac]["connected_port"] = switch_port
 
             # Before adding new edges, I want to remove old switch-host edges
+            # Not very scalable on networks with a lot of edges
             old_edges_to_remove = []
             for u, v, k, attrs in self.graph.edges(keys=True, data=True):
                 if attrs.get("type") == "host_switch":
@@ -211,7 +213,6 @@ class DigitalTwin:
                     state="unknown",
                 )
             else:
-                # Update state just in case
                 self.graph[mac][switch_dpid][edge_key]["switch_port"] = switch_port
         # Remove hosts no longer present
         # list() fixes the list of nodes at the beginning of the cycle, while graph.nodes is dynamic
@@ -248,6 +249,8 @@ class DigitalTwin:
             self.graph.nodes[dpid]["flows"] = flows
 
     def update_host_link_states(self, portdesc_dict: Dict[str, List[Dict]]):
+        # Here we use portdesc to see which current ports are up or down
+        # The edges themselves have been created in the update_hosts() function
         if not portdesc_dict:
             return
         for dpid, ports in portdesc_dict.items():
@@ -262,10 +265,11 @@ class DigitalTwin:
                     port_no = int(port_no)
                 config = p.get("config", 0)
                 state = p.get("state", 0)
+                # Bitmask
                 is_down = ((config & 1) == 1) or ((state & 1) == 1)
                 port_state_map[port_no] = "down" if is_down else "up"
 
-            # Here i go through every existing edge to update the link state based on the port_state_map (so the effective actual state of the ports)
+            # Here I go through every existing edge to update the link state based on the port_state_map (so the effective actual state of the ports)
             for u, v, key, attrs in list(self.graph.edges(keys=True, data=True)):
                 if attrs.get("type") != "host_switch":
                     continue
@@ -307,7 +311,7 @@ class DigitalTwin:
             return
         current_state = self.to_dict()
         # Simple diff: keys and values
-        # For brevity, we compare nodes and edges
+        # We compare nodes and edges
         prev_nodes = {n["id"]: n for n in previous_state["nodes"]}
         curr_nodes = {n["id"]: n for n in current_state["nodes"]}
         prev_edges = {(e["u"], e["v"], e["key"]): e for e in previous_state["edges"]}
@@ -338,7 +342,7 @@ class DigitalTwin:
         self._prev_state = current_state
 
     # ----------------------------------------------------------------------
-    # Serialization (to/from JSON)
+    # Serialization (to/from DICT) (to/from JSON)
     # ----------------------------------------------------------------------
     def to_dict(self) -> Dict:
         """Convert the entire graph to a serializable dictionary."""
@@ -439,6 +443,7 @@ class DigitalTwin:
             "hypothetical_actions": set(),
         }
 
+        # Check wether the hypothetical match is a subset of one of the existing flows
         def is_subset(hypo_match, real_match):
             if not hypo_match:
                 return True
@@ -463,11 +468,14 @@ class DigitalTwin:
                         host, sw = u, v
                         sw_port = attrs.get("switch_port")
                     if sw == sw_dpid and sw_port == port_no:
+                        # I just discovered that the new output port of the switch is a host
                         state = attrs.get("state", "unknown")
                         host_mac = host if self.graph.nodes[host].get("type") == "host" else None
                         if host_mac:
                             ip = self.graph.nodes[host].get("ipv4", [""])[0]
                             return f"host {host_mac} (IP {ip})", state
+
+            # The new output port of that switch is not going to a host, maybe it's another switch?
             # Check switch-switch edges – now using the edge key to find ports
             for u, v, key, attrs in self.graph.edges(keys=True, data=True):
                 if attrs.get("type") != "switch_switch":
