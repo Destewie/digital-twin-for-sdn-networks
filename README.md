@@ -85,7 +85,7 @@ Examples:
 *"(dt)" is used to indicate commands to lounch on the digital twin cli.*  
 
 ### Dynamic network modificatioon
-```sudo mn --topo single,3 --mac --switch ovsk --controller remote```   
+```sudo mn --topo single,2 --mac --switch ovsk --controller remote```   
 - Add a host  
 ```py net.addHost('h3')```  
 ```py net.addLink(h3, s1)```  
